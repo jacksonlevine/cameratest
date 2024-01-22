@@ -10,6 +10,9 @@
 #define TEXT_LOADER_IMPLEMENTATION
 #include "textloader.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 
 int forward = 0;
 int backward = 0;
@@ -24,9 +27,42 @@ GLuint TEXTURE_ID;
 
 float VIEWDISTANCE = 7.0f;
 
-const int WIDTH = 720;
+const int WIDTH = 1280;
 const int HEIGHT = 720;
-GLubyte PIXELS[WIDTH * HEIGHT];
+
+const int NUMCHANNELS = 3;
+
+float lastFrame = 0.0f;
+float deltaTime = 0.0f;
+
+float yOffset = 0.0f;
+
+void updateTime() {
+    double currentFrame = glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+}
+
+
+GLubyte PIXELS[WIDTH * HEIGHT * NUMCHANNELS];
+
+GLuint stoneTexture = 0;
+int nrChannels;
+GLubyte* stoneWallTexture;
+
+void loadTexture() {
+
+    int width, height;
+    stoneWallTexture = stbi_load("assets/stonewall.png", &width, &height, &nrChannels, 0);
+    if (stoneWallTexture)
+    {
+        std::cout << "channels: " << nrChannels << "\n";
+    }
+    else
+    {
+        std::cout << "Failed to load texture stonewall" << std::endl;
+    }
+}
 
 int MAPWIDTH = 5;
 
@@ -38,8 +74,27 @@ int MAP[] = {
     1, 1, 1, 1, 1
 };
 
+glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture) {
+    //assuming texture is always 32x32
+
+    int x = std::round(uvX * 32.0f);
+    int y = std::round((1.0f - uvY )* 31.0f);
+
+    int index = y * 32 + x;
+
+    int realIndex = index * nrChannels;
+
+    return glm::ivec3(texture[realIndex], texture[realIndex+1], texture[realIndex+2]);
+}
+
 glm::vec2 cameraPosition = glm::vec2(0,0);
 float cameraAngle = 0.0f;
+
+void setPixel(int ind, GLubyte r,GLubyte g,GLubyte b) {
+    PIXELS[ind*3] = r;
+    PIXELS[ind*3 + 1] = g;
+    PIXELS[ind*3 + 2] = b;
+}
 
 glm::vec2 directionFromAngle(float angle) {
 
@@ -84,21 +139,20 @@ int pixelIndexFromCoord(int x, int y) {
     }
 }
 
-float turnSpeed = 0.0025f;
 void castRaysFromCamera() {
 
     if(lookright) {
         
-        cameraPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*turnSpeed;
+        cameraPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*deltaTime;
     }
     if(lookleft) {
-        cameraPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*turnSpeed;
+        cameraPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*deltaTime;
     }
     if(forward) {
-        cameraPosition += directionFromAngle(cameraAngle)*turnSpeed;
+        cameraPosition += directionFromAngle(cameraAngle)*deltaTime;
     }
     if(backward) {
-        cameraPosition -= directionFromAngle(cameraAngle)*turnSpeed;
+        cameraPosition -= directionFromAngle(cameraAngle)*deltaTime;
     }
 
 
@@ -114,23 +168,27 @@ void castRaysFromCamera() {
 
         int hit = -1;
 
-        for(float i = 0; i < VIEWDISTANCE; i += 0.25f) {
-            glm::vec2 testSpot = cameraPosition + (rayDir * i);
-            int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
+        glm::vec2 testSpot;
+
+        for(float i = 0; i < VIEWDISTANCE; i += 0.01f) {
+            testSpot = cameraPosition + (rayDir * i);
+            int sampled = sampleMap(std::floor(testSpot.x), std::floor(testSpot.y));
             
             hit = sampled;
-            travel+=0.25f;
+            travel+=0.01f;
             if(sampled == 1 || sampled == -1) {
 
                 
                 if(sampled == 1) {
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
-                    while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
-                        testSpot -= rayDir*0.01f;
-                        travel -= 0.01f;
-                        rolledBack += 0.01f;
+                    while (sampleMap(std::floor(testSpot.x), std::floor(testSpot.y)) != 0 && sampleMap(std::floor(testSpot.x), std::floor(testSpot.y)) != -1) {
+                        testSpot -= rayDir*0.001f;
+                        travel -= 0.001f;
+                        rolledBack += 0.001f;
                     }
+
+                    testSpot += rayDir*0.005f;
                     //std::cout << "rolled back travel " << rolledBack << " to " << travel << "\n";
                 }
                 
@@ -148,22 +206,39 @@ void castRaysFromCamera() {
             for(int i = 0; i < HEIGHT; i++) {
                 int ind = pixelIndexFromCoord(col, i);
                 if(ind != -1) {
-                    PIXELS[ind] = 0;
+                    setPixel(ind, 0, 0, 0);
                 }
             }
         } else {
+
+            float zmod = std::fmod(testSpot.y, 1.0f);
+            float xmod = std::fmod(testSpot.x, 1.0f);
+
+            float uvX;
+
+            if(std::abs(zmod) > std::abs(xmod)) {
+                uvX = std::abs(zmod);
+            } else {
+                uvX = std::abs(xmod);
+            }
+
+
             //std::cout << "hit on col " << col << " with travel " << travel << "\n";'
 
-            int height = std::max(5.0f - (travel), 0.0f) * 50;
+            int height = std::max(5.0f - (travel), 1.5f) * 50;
 
             int trav = 0;
             for(int i = HEIGHT/2; i < HEIGHT; i++) {
                 int ind = pixelIndexFromCoord(col, i);
                 if(ind != -1) {
+                    float uvY = 0.5f - (((float)trav/height) / 2.0f);
                     if(trav < height) {
-                        PIXELS[ind] = 255 - (travel*50);
+                        
+
+                        glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
+                        setPixel(ind, std::max(0, color.r - (int)(travel*20)), std::max(0, color.g - (int)(travel*20)), std::max(0, color.b - (int)(travel*20)));
                     } else {
-                        PIXELS[ind] = 0;
+                        setPixel(ind, 0, 0, 0);
                     }
                     
                 }
@@ -173,10 +248,12 @@ void castRaysFromCamera() {
             for(int i = HEIGHT/2; i > -1; i--) {
                 int ind = pixelIndexFromCoord(col, i);
                 if(ind != -1) {
+                    float uvY = 0.5f + (((float)trav/height) / 2.0f);
                     if(trav < height) {
-                        PIXELS[ind] = 255 - (travel*50);
+                        glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
+                        setPixel(ind, std::max(0, color.r - (int)(travel*20)), std::max(0, color.g - (int)(travel*20)), std::max(0, color.b - (int)(travel*20)));
                     } else {
-                        PIXELS[ind] = 0;
+                        setPixel(ind, 0, 0, 0);
                     }
                     
                 }
@@ -216,13 +293,17 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
         }
 
         double xDelta = xpos - lastX;
+        double yDelta = ypos - lastY;
 
         lastX = xpos;
         lastY = ypos;
 
         xDelta *= 0.001;
+        yDelta *= 0.001;
 
         cameraAngle += xDelta;
+
+        yOffset = std::max(std::min(yOffset + yDelta, 0.5), -0.5);
         
     }
 }
@@ -312,7 +393,7 @@ int main() {
     glGenTextures(1, &TEXTURE_ID);
     glBindTexture(GL_TEXTURE_2D, TEXTURE_ID);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, WIDTH, HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -350,17 +431,22 @@ int main() {
 
     glUseProgram(SHADER_PROG1);
 
+    loadTexture();
+
 
 
     while(!glfwWindowShouldClose(WINDOW)) {
 
+        GLuint yoloc = glGetUniformLocation(SHADER_PROG1, "yOffset");
+        glUniform1f(yoloc, yOffset);
+
         glClearColor(0.0f,0.0f,0.0f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        
+        updateTime();
         castRaysFromCamera();
 
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RED, GL_UNSIGNED_BYTE, PIXELS);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, PIXELS);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
