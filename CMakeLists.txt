@@ -20,6 +20,3 @@ target_link_libraries(main PRIVATE glm::glm)
 find_package(GLEW REQUIRED)
 target_link_libraries(main PRIVATE GLEW::GLEW)
 
-set(OpenCV_DIR "${VCPKG_INSTALLED_DIR}/x64-windows-static/share/opencv4")
-find_package(OpenCV REQUIRED)
-target_link_libraries(main PRIVATE ${OpenCV_LIBS})

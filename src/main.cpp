@@ -10,33 +10,261 @@
 #define TEXT_LOADER_IMPLEMENTATION
 #include "textloader.h"
 
-#include <opencv2/opencv.hpp>
 
+int forward = 0;
+int backward = 0;
+int lookleft = 0;
+int lookright = 0;
 
 GLFWwindow * WINDOW;
-int WWIDTH = 1280;
-int WHEIGHT = 720;
 
 GLuint SHADER_PROG1;
 GLuint TEXTURE_ID;
+
+
+float VIEWDISTANCE = 7.0f;
+
+const int WIDTH = 720;
+const int HEIGHT = 720;
+GLubyte PIXELS[WIDTH * HEIGHT];
+
+int MAPWIDTH = 5;
+
+int MAP[] = {
+    1, 1, 1, 1, 1,
+    1, 0, 1, 0, 1,
+    0, 0, 0, 0, 0,
+    1, 0, 0, 0, 1,
+    1, 1, 1, 1, 1
+};
+
+glm::vec2 cameraPosition = glm::vec2(0,0);
+float cameraAngle = 0.0f;
+
+glm::vec2 directionFromAngle(float angle) {
+
+    if(angle < 0) {
+        angle = (2.0f * std::acos(-1.0f)) + angle;
+    }
+    float normalizedAngle = fmod(angle, 2.0f * std::acos(-1.0f));
+    return glm::vec2(
+        std::cos(normalizedAngle),
+        std::sin(normalizedAngle) 
+    );
+}
+
+int mapIndexFromCoord(int x, int z) {
+    int zeroZero = MAPWIDTH/2 + (MAPWIDTH/2) * MAPWIDTH;
+
+    int result = zeroZero + x + z * MAPWIDTH;
+
+    if(result < MAPWIDTH*MAPWIDTH && result > -1) {
+        return result;
+    } else {
+        return -1;
+    }
+}
+
+int sampleMap(int x, int z) {
+    int test = mapIndexFromCoord(x,z);
+    if(test != -1) {
+        return MAP[test];
+    } else {
+        return -1;
+    }
+}
+
+int pixelIndexFromCoord(int x, int y) {
+    int result = y * WIDTH + x;
+
+    if(result > -1 && result < WIDTH*HEIGHT) {
+        return result;
+    } else {
+        return -1;
+    }
+}
+
+float turnSpeed = 0.0025f;
+void castRaysFromCamera() {
+
+    if(lookright) {
+        
+        cameraPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*turnSpeed;
+    }
+    if(lookleft) {
+        cameraPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*turnSpeed;
+    }
+    if(forward) {
+        cameraPosition += directionFromAngle(cameraAngle)*turnSpeed;
+    }
+    if(backward) {
+        cameraPosition -= directionFromAngle(cameraAngle)*turnSpeed;
+    }
+
+
+    for(int col = 0; col < WIDTH; col++) {
+
+        float angle = ((((col - (WIDTH / 2)) / (WIDTH/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
+
+        //std::cout << angle << "\n";
+        glm::vec2 rayDir = directionFromAngle(angle + cameraAngle);
+        //std::cout << rayDir.x << " " << rayDir.y << "\n";
+
+        float travel = 0;
+
+        int hit = -1;
+
+        for(float i = 0; i < VIEWDISTANCE; i += 0.25f) {
+            glm::vec2 testSpot = cameraPosition + (rayDir * i);
+            int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
+            
+            hit = sampled;
+            travel+=0.25f;
+            if(sampled == 1 || sampled == -1) {
+
+                
+                if(sampled == 1) {
+                    float rolledBack = 0.0f;
+                    //std::cout << "travel was " << travel << "\n";
+                    while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
+                        testSpot -= rayDir*0.01f;
+                        travel -= 0.01f;
+                        rolledBack += 0.01f;
+                    }
+                    //std::cout << "rolled back travel " << rolledBack << " to " << travel << "\n";
+                }
+                
+
+
+                break;
+            }
+        }
+
+
+
+        
+
+        if(hit == 0 || hit == -1) {
+            for(int i = 0; i < HEIGHT; i++) {
+                int ind = pixelIndexFromCoord(col, i);
+                if(ind != -1) {
+                    PIXELS[ind] = 0;
+                }
+            }
+        } else {
+            //std::cout << "hit on col " << col << " with travel " << travel << "\n";'
+
+            int height = std::max(5.0f - (travel), 0.0f) * 50;
+
+            int trav = 0;
+            for(int i = HEIGHT/2; i < HEIGHT; i++) {
+                int ind = pixelIndexFromCoord(col, i);
+                if(ind != -1) {
+                    if(trav < height) {
+                        PIXELS[ind] = 255 - (travel*50);
+                    } else {
+                        PIXELS[ind] = 0;
+                    }
+                    
+                }
+                trav++;
+            }
+            trav = 0;
+            for(int i = HEIGHT/2; i > -1; i--) {
+                int ind = pixelIndexFromCoord(col, i);
+                if(ind != -1) {
+                    if(trav < height) {
+                        PIXELS[ind] = 255 - (travel*50);
+                    } else {
+                        PIXELS[ind] = 0;
+                    }
+                    
+                }
+                trav++;
+            }
+        }
+    }
+
+}
+
+bool mouseCaptured = false;
+
+
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        mouseCaptured = true;
+    }
+        
+
+}
+
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    static double lastX = 0;
+    static double lastY = 0;
+
+    static bool firstMouse = true;
+    if(mouseCaptured) {
+        if(firstMouse) {
+            lastX = xpos;
+            lastY = ypos;
+            firstMouse = false;
+        }
+
+        double xDelta = xpos - lastX;
+
+        lastX = xpos;
+        lastY = ypos;
+
+        xDelta *= 0.001;
+
+        cameraAngle += xDelta;
+        
+    }
+}
+
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_A)
+    {
+        lookleft = action;
+        
+    }
+    if (key == GLFW_KEY_D)
+    {
+        lookright = action;
+    }
+
+    if (key == GLFW_KEY_W) {
+        forward = action;
+    }
+    if (key == GLFW_KEY_S) {
+        backward = action;
+    }
+    if(key == GLFW_KEY_ESCAPE) {
+        if(mouseCaptured && action == 1) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            mouseCaptured = false;
+        } else 
+        if(!mouseCaptured && action == 1){
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            mouseCaptured = true;
+        }
+    }
+        
+}
+
+
 
 //Uncomment this stuff to remove console when done:
 //#include <Windows.h>
 //int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 int main() {
-
-    cv::VideoCapture cap(0); //Open el default camero
-
-    if (!cap.isOpened()) {
-        std::cerr << "Error opening video stream or file" << std::endl;
-        return EXIT_FAILURE;
-    }
-
-
-
-    cv::Mat frame;
-    cap >> frame;  //Take an initial cap to get the size;
-
 
 
 
@@ -45,7 +273,7 @@ int main() {
 
     glfwInit();
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    if (!(WINDOW = glfwCreateWindow(frame.cols, frame.rows, "CameraTest", NULL, NULL))) {
+    if (!(WINDOW = glfwCreateWindow(WIDTH, HEIGHT, "RayTest", NULL, NULL))) {
         glfwTerminate();
         return EXIT_FAILURE;
     }
@@ -54,9 +282,9 @@ int main() {
     glfwMakeContextCurrent(WINDOW);
     glewInit();
 
-    //glfwSetMouseButtonCallback(WINDOW, mouse_button_callback);
-    //glfwSetCursorPosCallback(WINDOW, cursor_position_callback);
-    //glfwSetKeyCallback(WINDOW, key_callback);
+    glfwSetMouseButtonCallback(WINDOW, mouse_button_callback);
+    glfwSetCursorPosCallback(WINDOW, cursor_position_callback);
+    glfwSetKeyCallback(WINDOW, key_callback);
 
     std::string vertexShaderSrc;
     std::string fragmentShaderSrc;
@@ -84,7 +312,7 @@ int main() {
     glGenTextures(1, &TEXTURE_ID);
     glBindTexture(GL_TEXTURE_2D, TEXTURE_ID);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, frame.cols, frame.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, WIDTH, HEIGHT, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -122,20 +350,17 @@ int main() {
 
     glUseProgram(SHADER_PROG1);
 
-    double updateSimTimer = 0.0;
+
 
     while(!glfwWindowShouldClose(WINDOW)) {
 
         glClearColor(0.0f,0.0f,0.0f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        
+        castRaysFromCamera();
 
-        cap >> frame;
-        if(frame.empty()) {
-            break;
-        }
-        cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame.cols, frame.rows, GL_RGB, GL_UNSIGNED_BYTE, frame.data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RED, GL_UNSIGNED_BYTE, PIXELS);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -143,7 +368,6 @@ int main() {
         glfwPollEvents();
     }
 
-    cap.release();
     glfwDestroyWindow(WINDOW);
     glfwTerminate();
 
