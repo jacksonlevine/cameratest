@@ -14,6 +14,10 @@
 #include "stb_image.h"
 
 
+const int SWIDTH = 1280;
+const int SHEIGHT = 720;
+
+
 int forward = 0;
 int backward = 0;
 int lookleft = 0;
@@ -25,10 +29,18 @@ GLuint SHADER_PROG1;
 GLuint TEXTURE_ID;
 
 
-float VIEWDISTANCE = 7.0f;
+float MAXIMUMYSHEAR = 0.5f;
 
-const int WIDTH = 1280;
-const int HEIGHT = 720;
+
+
+
+float VIEWDISTANCE = 17.0f;
+
+const int WIDTH = 320;
+const int HEIGHT = 180;
+
+
+float WALLHEIGHT = (float)HEIGHT;
 
 const int NUMCHANNELS = 3;
 
@@ -43,12 +55,18 @@ void updateTime() {
     lastFrame = currentFrame;
 }
 
+glm::ivec3 BACKGROUNDCOLOR = glm::ivec3(90, 0, 150);
 
 GLubyte PIXELS[WIDTH * HEIGHT * NUMCHANNELS];
 
 GLuint stoneTexture = 0;
 int nrChannels;
+int nrMapChannels;
 GLubyte* stoneWallTexture;
+
+int MAPWIDTH;
+
+GLubyte * MAP;
 
 void loadTexture() {
 
@@ -62,17 +80,21 @@ void loadTexture() {
     {
         std::cout << "Failed to load texture stonewall" << std::endl;
     }
+
+    MAP = stbi_load("assets/map.bmp", &MAPWIDTH, &height, &nrMapChannels, 1);
+    assert(MAPWIDTH == height);
+    assert(nrMapChannels == 1);
+    if (MAP)
+    {
+        std::cout << "channels: " << nrMapChannels << "\n";
+    }
+    else
+    {
+        std::cout << "Failed to load texture stonewall" << std::endl;
+    }
 }
 
-int MAPWIDTH = 5;
 
-int MAP[] = {
-    1, 1, 1, 1, 1,
-    1, 0, 1, 0, 1,
-    0, 0, 0, 0, 0,
-    1, 0, 0, 0, 1,
-    1, 1, 1, 1, 1
-};
 
 glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture) {
     //assuming texture is always 32x32
@@ -123,7 +145,7 @@ int mapIndexFromCoord(int x, int z) {
 int sampleMap(int x, int z) {
     int test = mapIndexFromCoord(x,z);
     if(test != -1) {
-        return MAP[test];
+        return MAP[test] == 255 ? 1 : 0;
     } else {
         return -1;
     }
@@ -170,18 +192,23 @@ void castRaysFromCamera() {
 
         glm::vec2 testSpot;
 
+        glm::vec2 lastSpotBeforeHit;
+        glm::vec2 hitSpot;
+
         for(float i = 0; i < VIEWDISTANCE; i += 0.01f) {
             testSpot = cameraPosition + (rayDir * i);
             int sampled = sampleMap(std::floor(testSpot.x), std::floor(testSpot.y));
             
             hit = sampled;
             travel+=0.01f;
+
             if(sampled == 1 || sampled == -1) {
 
                 
                 if(sampled == 1) {
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
+                    hitSpot = glm::vec2(std::floor(testSpot.x), std::floor(testSpot.y));
                     while (sampleMap(std::floor(testSpot.x), std::floor(testSpot.y)) != 0 && sampleMap(std::floor(testSpot.x), std::floor(testSpot.y)) != -1) {
                         testSpot -= rayDir*0.001f;
                         travel -= 0.001f;
@@ -195,6 +222,8 @@ void castRaysFromCamera() {
 
 
                 break;
+            } else {
+                lastSpotBeforeHit = glm::vec2(std::floor(testSpot.x), std::floor(testSpot.y));
             }
         }
 
@@ -206,26 +235,31 @@ void castRaysFromCamera() {
             for(int i = 0; i < HEIGHT; i++) {
                 int ind = pixelIndexFromCoord(col, i);
                 if(ind != -1) {
-                    setPixel(ind, 0, 0, 0);
+                    setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
                 }
             }
         } else {
+
+            float diffX = std::abs(hitSpot.x - lastSpotBeforeHit.x);
+            float diffZ = std::abs(hitSpot.y - lastSpotBeforeHit.y); // Assuming Y is treated as Z
+
+          
 
             float zmod = std::fmod(testSpot.y, 1.0f);
             float xmod = std::fmod(testSpot.x, 1.0f);
 
             float uvX;
 
-            if(std::abs(zmod) > std::abs(xmod)) {
-                uvX = std::abs(zmod);
+            if (diffX > diffZ) {
+                uvX = std::abs(zmod); 
             } else {
-                uvX = std::abs(xmod);
+                uvX = std::abs(xmod); 
             }
 
 
             //std::cout << "hit on col " << col << " with travel " << travel << "\n";'
 
-            int height = std::max(5.0f - (travel), 1.5f) * 50;
+            int height = ( WALLHEIGHT / travel) / 2.0f;
 
             int trav = 0;
             for(int i = HEIGHT/2; i < HEIGHT; i++) {
@@ -236,9 +270,9 @@ void castRaysFromCamera() {
                         
 
                         glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
-                        setPixel(ind, std::max(0, color.r - (int)(travel*20)), std::max(0, color.g - (int)(travel*20)), std::max(0, color.b - (int)(travel*20)));
+                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
                     } else {
-                        setPixel(ind, 0, 0, 0);
+                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
                     }
                     
                 }
@@ -251,9 +285,9 @@ void castRaysFromCamera() {
                     float uvY = 0.5f + (((float)trav/height) / 2.0f);
                     if(trav < height) {
                         glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
-                        setPixel(ind, std::max(0, color.r - (int)(travel*20)), std::max(0, color.g - (int)(travel*20)), std::max(0, color.b - (int)(travel*20)));
+                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
                     } else {
-                        setPixel(ind, 0, 0, 0);
+                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
                     }
                     
                 }
@@ -265,7 +299,7 @@ void castRaysFromCamera() {
 }
 
 bool mouseCaptured = false;
-
+bool firstMouse = true;
 
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -284,7 +318,6 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     static double lastX = 0;
     static double lastY = 0;
 
-    static bool firstMouse = true;
     if(mouseCaptured) {
         if(firstMouse) {
             lastX = xpos;
@@ -303,7 +336,7 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 
         cameraAngle += xDelta;
 
-        yOffset = std::max(std::min(yOffset + yDelta, 0.5), -0.5);
+        yOffset = std::max(std::min(yOffset + yDelta, (double)MAXIMUMYSHEAR), -((double)MAXIMUMYSHEAR));
         
     }
 }
@@ -330,6 +363,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if(key == GLFW_KEY_ESCAPE) {
         if(mouseCaptured && action == 1) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            firstMouse = true;
             mouseCaptured = false;
         } else 
         if(!mouseCaptured && action == 1){
@@ -354,7 +388,7 @@ int main() {
 
     glfwInit();
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    if (!(WINDOW = glfwCreateWindow(WIDTH, HEIGHT, "RayTest", NULL, NULL))) {
+    if (!(WINDOW = glfwCreateWindow(SWIDTH, SHEIGHT, "RayTest", NULL, NULL))) {
         glfwTerminate();
         return EXIT_FAILURE;
     }
@@ -401,13 +435,13 @@ int main() {
     //The quad that the entire screen is drawn on
     float quadVertices[] = {
     // positions   // texture coords
-    -1.0f,  1.0f,  0.0f, 0.0f, // Top Left
-    -1.0f, -1.0f,  0.0f, 1.0f, // Bottom Left
-     1.0f, -1.0f,  1.0f, 1.0f, // Bottom Right
+    -1.0f - MAXIMUMYSHEAR,  1.0f + MAXIMUMYSHEAR,  0.0f, 0.0f, // Top Left
+    -1.0f- MAXIMUMYSHEAR, -1.0f - MAXIMUMYSHEAR,  0.0f, 1.0f, // Bottom Left
+     1.0f + MAXIMUMYSHEAR, -1.0f - MAXIMUMYSHEAR,  1.0f, 1.0f, // Bottom Right
 
-    -1.0f,  1.0f,  0.0f, 0.0f, // Top Left
-     1.0f, -1.0f,  1.0f, 1.0f, // Bottom Right
-     1.0f,  1.0f,  1.0f, 0.0f  // Top Right
+    -1.0f - MAXIMUMYSHEAR,  1.0f + MAXIMUMYSHEAR,  0.0f, 0.0f, // Top Left
+     1.0f + MAXIMUMYSHEAR, -1.0f - MAXIMUMYSHEAR,  1.0f, 1.0f, // Bottom Right
+     1.0f + MAXIMUMYSHEAR,  1.0f + MAXIMUMYSHEAR,  1.0f, 0.0f  // Top Right
     };
 
 
