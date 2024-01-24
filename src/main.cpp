@@ -242,7 +242,7 @@ void castRaysFromCamera() {
 
                 glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture);
                 
-                setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
+                setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, travel*1.5f/VIEWDISTANCE)));
             }
             //std::cout << travel << "\n";
         }
