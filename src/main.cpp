@@ -25,6 +25,8 @@ struct BlockType {
 };
 
 
+glm::vec2 viewedBlock;
+
 
 const int SWIDTH = 1280;
 const int SHEIGHT = 720;
@@ -41,7 +43,7 @@ GLuint SHADER_PROG1;
 GLuint TEXTURE_ID;
 
 
-float MAXIMUMYSHEAR = 0.7f;
+float MAXIMUMYSHEAR = 0.0f;
 
 
 
@@ -383,6 +385,9 @@ void castRaysFromCamera() {
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
                     hitSpot = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
+                    if(col == WIDTH/2) {
+                        viewedBlock = hitSpot;
+                    }
                     while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
                         testSpot -= rayDir*0.001f;
                         travel -= 0.001f;
@@ -562,6 +567,11 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
+        int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
+        if(mapInd != -1) {
+            MAP[mapInd] = 0;
+        }
+
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         mouseCaptured = true;
     }
