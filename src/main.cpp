@@ -63,6 +63,7 @@ GLuint stoneTexture = 0;
 int nrChannels;
 int nrMapChannels;
 GLubyte* stoneWallTexture;
+GLubyte* floorTexture;
 
 int MAPWIDTH;
 
@@ -90,7 +91,17 @@ void loadTexture() {
     }
     else
     {
-        std::cout << "Failed to load texture stonewall" << std::endl;
+        std::cout << "Failed to load texture map" << std::endl;
+    }
+
+    floorTexture = stbi_load("assets/floor.png", &width, &height, &nrChannels, 0);
+    if (floorTexture)
+    {
+        std::cout << "channels: " << nrChannels << "\n";
+    }
+    else
+    {
+        std::cout << "Failed to load texture floor" << std::endl;
     }
 }
 
@@ -99,7 +110,7 @@ void loadTexture() {
 glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture) {
     //assuming texture is always 32x32
 
-    int x = std::round(uvX * 32.0f);
+    int x = std::round(uvX * 31.0f);
     int y = std::round((1.0f - uvY )* 31.0f);
 
     int index = y * 32 + x;
@@ -161,6 +172,8 @@ int pixelIndexFromCoord(int x, int y) {
     }
 }
 
+float cameraY = 0.5f;
+
 void castRaysFromCamera() {
 
     if(lookright) {
@@ -177,13 +190,72 @@ void castRaysFromCamera() {
         cameraPosition -= directionFromAngle(cameraAngle)*deltaTime;
     }
 
+    glm::vec2 cameraDirection = directionFromAngle(cameraAngle);
+    glm::vec2 cameraRight = directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)));
+
+    for(int row = 0; row < HEIGHT; row++) {
+
+        //now y means actual y
+        float angle = ((((row - (HEIGHT / 2)) / (HEIGHT/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
+
+        glm::vec3 rayDir(cameraDirection.x, angle, cameraDirection.y);
+        rayDir = glm::normalize(rayDir);
+
+        float travel = 0.0f;
+
+        glm::vec3 testSpot;
+
+        bool hit = false;
+
+        for(float i = 0; i < VIEWDISTANCE; i+= 0.01f) {
+            testSpot = glm::vec3(cameraPosition.x, cameraY, cameraPosition.y) + rayDir * i;
+
+            if(testSpot.y >= 1.0f || testSpot.y <= 0.0f) {
+                hit = true;
+                break;
+            }
+            travel += 0.01f;
+        }
+
+        if(hit) {
+
+            static float FOV = std::acos(-1.0f)/2.0f/* your field of view in radians */;
+
+
+
+
+            float anglePerPixel = FOV / WIDTH;
+
+            
+            for(int i = 0; i < WIDTH; i++) {
+
+                int ind = row * WIDTH + i;
+
+                float angleOffset = (i - WIDTH / 2.0f) * anglePerPixel;
+
+                glm::vec2 directionForPixel = directionFromAngle(cameraAngle + angleOffset);
+
+                glm::vec3 worldPosition = glm::vec3(cameraPosition.x, cameraY, cameraPosition.y) + glm::vec3(directionForPixel.x, 0, directionForPixel.y) * travel * 1.5f;
+
+                float uvX = std::abs(std::fmod(worldPosition.x, 1.0f));
+                float uvY = std::abs(std::fmod(worldPosition.z, 1.0f));
+
+                glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture);
+                
+                setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
+            }
+            //std::cout << travel << "\n";
+        }
+
+    }
+
 
     for(int col = 0; col < WIDTH; col++) {
 
         float angle = ((((col - (WIDTH / 2)) / (WIDTH/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
 
         //std::cout << angle << "\n";
-        glm::vec2 rayDir = directionFromAngle(angle + cameraAngle);
+        glm::vec2 rayDir = glm::normalize(directionFromAngle(angle + cameraAngle));
         //std::cout << rayDir.x << " " << rayDir.y << "\n";
 
         float travel = 0;
@@ -232,12 +304,39 @@ void castRaysFromCamera() {
         
 
         if(hit == 0 || hit == -1) {
-            for(int i = 0; i < HEIGHT; i++) {
+            int height = ( WALLHEIGHT / travel) / 2.0f;
+
+            int trav = 0;
+            for(int i = HEIGHT/2; i < HEIGHT; i++) {
                 int ind = pixelIndexFromCoord(col, i);
                 if(ind != -1) {
-                    setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                    float uvY = 0.5f - (((float)trav/height) / 2.0f);
+                    if(trav < height) {
+                        
+
+                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                    } else {
+                        break;
+                    }
+                    
                 }
+                trav++;
             }
+            trav = 0;
+            for(int i = HEIGHT/2; i > -1; i--) {
+                int ind = pixelIndexFromCoord(col, i);
+                if(ind != -1) {
+                    float uvY = 0.5f + (((float)trav/height) / 2.0f);
+                    if(trav < height) {
+                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                    } else {
+                        break;
+                    }
+                    
+                }
+                trav++;
+            }
+            
         } else {
 
             float diffX = std::abs(hitSpot.x - lastSpotBeforeHit.x);
@@ -272,7 +371,7 @@ void castRaysFromCamera() {
                         glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
                         setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
                     } else {
-                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                        break;
                     }
                     
                 }
@@ -287,7 +386,7 @@ void castRaysFromCamera() {
                         glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
                         setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
                     } else {
-                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                        break;
                     }
                     
                 }
