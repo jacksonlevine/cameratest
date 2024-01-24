@@ -13,6 +13,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include "collcage.h"
+
 
 const int SWIDTH = 1280;
 const int SHEIGHT = 720;
@@ -20,8 +22,8 @@ const int SHEIGHT = 720;
 
 int forward = 0;
 int backward = 0;
-int lookleft = 0;
-int lookright = 0;
+int left = 0;
+int right = 0;
 
 GLFWwindow * WINDOW;
 
@@ -29,7 +31,7 @@ GLuint SHADER_PROG1;
 GLuint TEXTURE_ID;
 
 
-float MAXIMUMYSHEAR = 0.5f;
+float MAXIMUMYSHEAR = 0.7f;
 
 
 
@@ -174,21 +176,48 @@ int pixelIndexFromCoord(int x, int y) {
 
 float cameraY = 0.5f;
 
+LilCollisionCage collcage([](int x, int y){
+    int samp = sampleMap(x,y);
+    return samp != -1 && samp != 0;
+});
+
+BoundingBox user(cameraPosition, glm::vec2(0,0));
+
 void castRaysFromCamera() {
 
-    if(lookright) {
+    collcage.update_readings(cameraPosition);
+
+    glm::vec2 proposedPosition = cameraPosition;
+
+    if(right) {
         
-        cameraPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*deltaTime;
+        proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*deltaTime;
     }
-    if(lookleft) {
-        cameraPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*deltaTime;
+    if(left) {
+        proposedPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*deltaTime;
     }
     if(forward) {
-        cameraPosition += directionFromAngle(cameraAngle)*deltaTime;
+        proposedPosition += directionFromAngle(cameraAngle)*deltaTime;
     }
     if(backward) {
-        cameraPosition -= directionFromAngle(cameraAngle)*deltaTime;
+        proposedPosition -= directionFromAngle(cameraAngle)*deltaTime;
     }
+
+    std::vector<glm::vec2> correctionsMade;
+
+    user.set_center(proposedPosition, 0.2f);
+    collcage.update_colliding(user);
+
+    if(collcage.colliding.size() > 0) {
+        for(Side side : collcage.colliding) {
+            if(std::find(correctionsMade.begin(), correctionsMade.end(), LilCollisionCage::normals[side]) == correctionsMade.end()) {
+                proposedPosition += LilCollisionCage::normals[side] * collcage.penetration[side];
+                correctionsMade.push_back(LilCollisionCage::normals[side]);
+            }
+        }
+    }
+
+    cameraPosition = proposedPosition;
 
     glm::vec2 cameraDirection = directionFromAngle(cameraAngle);
     glm::vec2 cameraRight = directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)));
@@ -206,15 +235,17 @@ void castRaysFromCamera() {
         glm::vec3 testSpot;
 
         bool hit = false;
+        
+        static float RAYSTEP = 0.01f;
 
-        for(float i = 0; i < VIEWDISTANCE; i+= 0.01f) {
+        for(float i = 0; i < VIEWDISTANCE; i+= RAYSTEP) {
             testSpot = glm::vec3(cameraPosition.x, cameraY, cameraPosition.y) + rayDir * i;
 
             if(testSpot.y >= 1.0f || testSpot.y <= 0.0f) {
                 hit = true;
                 break;
             }
-            travel += 0.01f;
+            travel += RAYSTEP;
         }
 
         if(hit) {
@@ -224,7 +255,7 @@ void castRaysFromCamera() {
 
 
 
-            float anglePerPixel = FOV / WIDTH;
+            static float anglePerPixel = FOV / WIDTH;
 
             
             for(int i = 0; i < WIDTH; i++) {
@@ -267,12 +298,14 @@ void castRaysFromCamera() {
         glm::vec2 lastSpotBeforeHit;
         glm::vec2 hitSpot;
 
-        for(float i = 0; i < VIEWDISTANCE; i += 0.01f) {
+        static float RAYSTEP = 0.01f;
+
+        for(float i = 0; i < VIEWDISTANCE; i += RAYSTEP) {
             testSpot = cameraPosition + (rayDir * i);
-            int sampled = sampleMap(std::floor(testSpot.x), std::floor(testSpot.y));
+            int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
             
             hit = sampled;
-            travel+=0.01f;
+            travel+=RAYSTEP;
 
             if(sampled == 1 || sampled == -1) {
 
@@ -280,8 +313,8 @@ void castRaysFromCamera() {
                 if(sampled == 1) {
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
-                    hitSpot = glm::vec2(std::floor(testSpot.x), std::floor(testSpot.y));
-                    while (sampleMap(std::floor(testSpot.x), std::floor(testSpot.y)) != 0 && sampleMap(std::floor(testSpot.x), std::floor(testSpot.y)) != -1) {
+                    hitSpot = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
+                    while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
                         testSpot -= rayDir*0.001f;
                         travel -= 0.001f;
                         rolledBack += 0.001f;
@@ -295,7 +328,7 @@ void castRaysFromCamera() {
 
                 break;
             } else {
-                lastSpotBeforeHit = glm::vec2(std::floor(testSpot.x), std::floor(testSpot.y));
+                lastSpotBeforeHit = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
             }
         }
 
@@ -445,12 +478,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
     if (key == GLFW_KEY_A)
     {
-        lookleft = action;
+        left = action;
         
     }
     if (key == GLFW_KEY_D)
     {
-        lookright = action;
+        right = action;
     }
 
     if (key == GLFW_KEY_W) {
