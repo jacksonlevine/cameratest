@@ -6,6 +6,7 @@
 #include <vector> 
 #include <cstdlib>
 #include <array>
+#include <string>
 
 #define TEXT_LOADER_IMPLEMENTATION
 #include "textloader.h"
@@ -14,6 +15,15 @@
 #include "stb_image.h"
 
 #include "collcage.h"
+
+#include <map>
+#include <stack>
+
+struct BlockType {
+    GLubyte *texture;
+    bool transparent;
+};
+
 
 
 const int SWIDTH = 1280;
@@ -36,7 +46,7 @@ float MAXIMUMYSHEAR = 0.7f;
 
 
 
-float VIEWDISTANCE = 17.0f;
+float VIEWDISTANCE = 10.0f;
 
 const int WIDTH = 320;
 const int HEIGHT = 180;
@@ -66,6 +76,12 @@ int nrChannels;
 int nrMapChannels;
 GLubyte* stoneWallTexture;
 GLubyte* floorTexture;
+GLubyte* plyWoodTexture;
+GLubyte* glassTexture;
+
+
+std::map<int, BlockType> blockTypes;
+
 
 int MAPWIDTH;
 
@@ -105,11 +121,46 @@ void loadTexture() {
     {
         std::cout << "Failed to load texture floor" << std::endl;
     }
+
+    plyWoodTexture = stbi_load("assets/plywood.png", &width, &height, &nrChannels, 0);
+    if (plyWoodTexture)
+    {
+        std::cout << "channels: " << nrChannels << "\n";
+    }
+    else
+    {
+        std::cout << "Failed to load texture plywood" << std::endl;
+    }
+
+    glassTexture = stbi_load("assets/glass.png", &width, &height, &nrChannels, 0);
+    if (glassTexture)
+    {
+        std::cout << "glass channels: " << nrChannels << "\n";
+    }
+    else
+    {
+        std::cout << "Failed to load texture glassTexture" << std::endl;
+    }
+
+    blockTypes = {
+    {255, BlockType{
+        stoneWallTexture,
+        false
+    }},
+    {100, BlockType{
+        plyWoodTexture,
+        false
+    }},
+    {150, BlockType{
+        glassTexture,
+        true
+    }}
+};
 }
 
 
 
-glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture) {
+glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture, int nrChannels) {
     //assuming texture is always 32x32
 
     int x = std::round(uvX * 31.0f);
@@ -118,6 +169,12 @@ glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture) {
     int index = y * 32 + x;
 
     int realIndex = index * nrChannels;
+    
+    if(nrChannels == 4) {
+        if(texture[realIndex+3] == 0) {
+            return glm::ivec3(-1,-1,-1);
+        }
+    }
 
     return glm::ivec3(texture[realIndex], texture[realIndex+1], texture[realIndex+2]);
 }
@@ -158,7 +215,7 @@ int mapIndexFromCoord(int x, int z) {
 int sampleMap(int x, int z) {
     int test = mapIndexFromCoord(x,z);
     if(test != -1) {
-        return MAP[test] == 255 ? 1 : 0;
+        return MAP[test];
     } else {
         return -1;
     }
@@ -176,12 +233,22 @@ int pixelIndexFromCoord(int x, int y) {
 
 float cameraY = 0.5f;
 
+float speedMult = 2.5f;
+
 LilCollisionCage collcage([](int x, int y){
     int samp = sampleMap(x,y);
     return samp != -1 && samp != 0;
 });
 
 BoundingBox user(cameraPosition, glm::vec2(0,0));
+
+struct HitPoint {
+    int type;
+    float travel;
+    glm::vec2 testSpot;
+    glm::vec2 hitSpot;
+    glm::vec2 lastSpotBeforeHit;
+};
 
 void castRaysFromCamera() {
 
@@ -191,16 +258,16 @@ void castRaysFromCamera() {
 
     if(right) {
         
-        proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*deltaTime;
+        proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
     }
     if(left) {
-        proposedPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*deltaTime;
+        proposedPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
     }
     if(forward) {
-        proposedPosition += directionFromAngle(cameraAngle)*deltaTime;
+        proposedPosition += directionFromAngle(cameraAngle)*speedMult*deltaTime;
     }
     if(backward) {
-        proposedPosition -= directionFromAngle(cameraAngle)*deltaTime;
+        proposedPosition -= directionFromAngle(cameraAngle)*speedMult*deltaTime;
     }
 
     std::vector<glm::vec2> correctionsMade;
@@ -271,7 +338,7 @@ void castRaysFromCamera() {
                 float uvX = std::abs(std::fmod(worldPosition.x, 1.0f));
                 float uvY = std::abs(std::fmod(worldPosition.z, 1.0f));
 
-                glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture);
+                glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture, 3);
                 
                 setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, travel*1.5f/VIEWDISTANCE)));
             }
@@ -282,6 +349,8 @@ void castRaysFromCamera() {
 
 
     for(int col = 0; col < WIDTH; col++) {
+
+        std::stack<HitPoint> drawQueue;
 
         float angle = ((((col - (WIDTH / 2)) / (WIDTH/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
 
@@ -299,18 +368,18 @@ void castRaysFromCamera() {
         glm::vec2 hitSpot;
 
         static float RAYSTEP = 0.01f;
-
+            testSpot = cameraPosition;
         for(float i = 0; i < VIEWDISTANCE; i += RAYSTEP) {
-            testSpot = cameraPosition + (rayDir * i);
+             testSpot += (rayDir * RAYSTEP);
             int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
             
             hit = sampled;
             travel+=RAYSTEP;
 
-            if(sampled == 1 || sampled == -1) {
+            if(sampled != 0) {
 
                 
-                if(sampled == 1) {
+                if(sampled != -1) {
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
                     hitSpot = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
@@ -322,108 +391,163 @@ void castRaysFromCamera() {
 
                     testSpot += rayDir*0.005f;
                     //std::cout << "rolled back travel " << rolledBack << " to " << travel << "\n";
+                    //std::cout << "pushing " << sampled << "\n";
+                    drawQueue.push(HitPoint{
+                        sampled,
+                        travel,
+                        testSpot,
+                        hitSpot,
+                        lastSpotBeforeHit
+                    });
+
+                    if(!(blockTypes.at(sampled).transparent)) {
+                        break;
+                    } else {
+                        //push past this transparent (don't keep adding it)
+                        while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) == sampled) {
+                            testSpot += rayDir*0.01f;
+                            travel += 0.01f;
+                            i+=0.01f;
+                        }
+                    }
+                } else {
+                    //std::cout << "pushing " << sampled << "\n";
+                    drawQueue.push(HitPoint{
+                        sampled,
+                        travel,
+                        testSpot,
+                        hitSpot,
+                        lastSpotBeforeHit
+                    });
                 }
                 
-
-
-                break;
+                
+                
             } else {
                 lastSpotBeforeHit = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
             }
         }
 
+        if(hit == 0) {
+            //std::cout << "pushing " << 0 << "\n";
+            drawQueue.push(HitPoint{
+                        0,
+                        travel,
+                        testSpot,
+                        hitSpot,
+                        lastSpotBeforeHit
+                    });
+        }
 
 
-        
 
-        if(hit == 0 || hit == -1) {
-            int height = ( WALLHEIGHT / travel) / 2.0f;
+        //std::cout << drawQueue.size() << "\n";
+        while(!drawQueue.empty())
+        {
+            HitPoint h = drawQueue.top();
 
-            int trav = 0;
-            for(int i = HEIGHT/2; i < HEIGHT; i++) {
-                int ind = pixelIndexFromCoord(col, i);
-                if(ind != -1) {
-                    float uvY = 0.5f - (((float)trav/height) / 2.0f);
-                    if(trav < height) {
+            drawQueue.pop();
+
+            if(h.type == 0 || h.type == -1) {
+                int height = ( WALLHEIGHT / h.travel) / 2.0f;
+
+                int trav = 0;
+                for(int i = HEIGHT/2; i < HEIGHT; i++) {
+                    int ind = pixelIndexFromCoord(col, i);
+                    if(ind != -1) {
+                        float uvY = 0.5f - (((float)trav/height) / 2.0f);
+                        if(trav < height) {
+                            
+
+                            setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                        } else {
+                            break;
+                        }
                         
-
-                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
-                    } else {
-                        break;
                     }
-                    
+                    trav++;
                 }
-                trav++;
-            }
-            trav = 0;
-            for(int i = HEIGHT/2; i > -1; i--) {
-                int ind = pixelIndexFromCoord(col, i);
-                if(ind != -1) {
-                    float uvY = 0.5f + (((float)trav/height) / 2.0f);
-                    if(trav < height) {
-                        setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
-                    } else {
-                        break;
+                trav = 0;
+                for(int i = HEIGHT/2; i > -1; i--) {
+                    int ind = pixelIndexFromCoord(col, i);
+                    if(ind != -1) {
+                        float uvY = 0.5f + (((float)trav/height) / 2.0f);
+                        if(trav < height) {
+                            setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                        } else {
+                            break;
+                        }
+                        
                     }
-                    
+                    trav++;
                 }
-                trav++;
-            }
-            
-        } else {
-
-            float diffX = std::abs(hitSpot.x - lastSpotBeforeHit.x);
-            float diffZ = std::abs(hitSpot.y - lastSpotBeforeHit.y); // Assuming Y is treated as Z
-
-          
-
-            float zmod = std::fmod(testSpot.y, 1.0f);
-            float xmod = std::fmod(testSpot.x, 1.0f);
-
-            float uvX;
-
-            if (diffX > diffZ) {
-                uvX = std::abs(zmod); 
+                
             } else {
-                uvX = std::abs(xmod); 
-            }
+
+                BlockType blockHere = blockTypes.at(h.type);
 
 
-            //std::cout << "hit on col " << col << " with travel " << travel << "\n";'
 
-            int height = ( WALLHEIGHT / travel) / 2.0f;
+                float diffX = std::abs(h.hitSpot.x - h.lastSpotBeforeHit.x);
+                float diffZ = std::abs(h.hitSpot.y - h.lastSpotBeforeHit.y); // Assuming Y is treated as Z
 
-            int trav = 0;
-            for(int i = HEIGHT/2; i < HEIGHT; i++) {
-                int ind = pixelIndexFromCoord(col, i);
-                if(ind != -1) {
-                    float uvY = 0.5f - (((float)trav/height) / 2.0f);
-                    if(trav < height) {
+            
+
+                float zmod = std::fmod(h.testSpot.y+0.5f, 1.0f);
+                float xmod = std::fmod(h.testSpot.x+0.5f, 1.0f);
+
+                float uvX;
+
+                if (diffX > diffZ) {
+                    uvX = std::abs(zmod); 
+                } else {
+                    uvX = std::abs(xmod); 
+                }
+
+
+                //std::cout << "hit on col " << col << " with travel " << travel << "\n";'
+
+                int height = ( WALLHEIGHT / h.travel) / 2.0f;
+
+                int trav = 0;
+                for(int i = HEIGHT/2; i < HEIGHT; i++) {
+                    int ind = pixelIndexFromCoord(col, i);
+                    if(ind != -1) {
+                        float uvY = 0.5f - (((float)trav/height) / 2.0f);
+                        if(trav < height) {
+                            
+
+                            glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, blockHere.transparent ? 4 : 3);
+                            if(color.r != -1) {
+                                setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                            }
+                            
+                        } else {
+                            break;
+                        }
                         
-
-                        glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
-                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
-                    } else {
-                        break;
                     }
-                    
+                    trav++;
                 }
-                trav++;
-            }
-            trav = 0;
-            for(int i = HEIGHT/2; i > -1; i--) {
-                int ind = pixelIndexFromCoord(col, i);
-                if(ind != -1) {
-                    float uvY = 0.5f + (((float)trav/height) / 2.0f);
-                    if(trav < height) {
-                        glm::ivec3 color = colorFromUV(uvX, uvY, stoneWallTexture);
-                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, travel/VIEWDISTANCE));
-                    } else {
-                        break;
+                trav = 0;
+                for(int i = HEIGHT/2; i > -1; i--) {
+                    int ind = pixelIndexFromCoord(col, i);
+                    if(ind != -1) {
+                        float uvY = 0.5f + (((float)trav/height) / 2.0f);
+                        if(trav < height) {
+                            glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, blockHere.transparent ? 4 : 3);
+                            if(color.r != -1)
+                            {   
+                                setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                            }
+                                
+                        } else {
+                            break;
+                        }
+                        
                     }
-                    
+                    trav++;
                 }
-                trav++;
             }
         }
     }
