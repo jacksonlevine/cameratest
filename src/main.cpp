@@ -11,6 +11,9 @@
 #define TEXT_LOADER_IMPLEMENTATION
 #include "textloader.h"
 
+
+#include "textview.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -18,6 +21,9 @@
 
 #include <map>
 #include <stack>
+
+TextView textView;
+
 
 struct BlockType {
     GLubyte *texture;
@@ -30,6 +36,8 @@ glm::vec2 viewedBlock;
 
 const int SWIDTH = 1280;
 const int SHEIGHT = 720;
+
+int blockTypeSelected = 0;
 
 
 int forward = 0;
@@ -45,7 +53,7 @@ GLuint TEXTURE_ID;
 
 float MAXIMUMYSHEAR = 0.0f;
 
-
+bool BUILDMODE = false;
 
 
 float VIEWDISTANCE = 10.0f;
@@ -80,10 +88,16 @@ GLubyte* stoneWallTexture;
 GLubyte* floorTexture;
 GLubyte* plyWoodTexture;
 GLubyte* glassTexture;
+GLubyte* selectTexture;
 
 
 std::map<int, BlockType> blockTypes;
+std::vector<std::pair<int, BlockType>> blockTypesOrdered;
 
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    blockTypeSelected = std::max(0, std::min((int)blockTypesOrdered.size()-1, (int)(blockTypeSelected + yoffset)));
+}
 
 int MAPWIDTH;
 
@@ -144,6 +158,12 @@ void loadTexture() {
         std::cout << "Failed to load texture glassTexture" << std::endl;
     }
 
+    selectTexture = stbi_load("assets/select.png", &width, &height, &nrChannels, 0);
+    if (!selectTexture)
+    {
+        std::cout << "Failed to load texture selectTexture" << std::endl;
+    }
+
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
@@ -155,6 +175,10 @@ void loadTexture() {
     }},
     {150, BlockType{
         glassTexture,
+        true
+    }},
+    {1, BlockType{
+        selectTexture,
         true
     }}
 };
@@ -181,6 +205,19 @@ glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture, int nrChannels) {
     return glm::ivec3(texture[realIndex], texture[realIndex+1], texture[realIndex+2]);
 }
 
+glm::ivec4 colorWithAlphaFromUV(float uvX, float uvY, GLubyte* texture) {
+    //assuming texture is always 32x32
+
+    int x = std::round(uvX * 31.0f);
+    int y = std::round((1.0f - uvY )* 31.0f);
+
+    int index = y * 32 + x;
+
+    int realIndex = index * 4;
+    
+    return glm::ivec4(texture[realIndex], texture[realIndex+1], texture[realIndex+2], texture[realIndex+3]);
+}
+
 glm::vec2 cameraPosition = glm::vec2(0,0);
 float cameraAngle = 0.0f;
 
@@ -188,6 +225,10 @@ void setPixel(int ind, GLubyte r,GLubyte g,GLubyte b) {
     PIXELS[ind*3] = r;
     PIXELS[ind*3 + 1] = g;
     PIXELS[ind*3 + 2] = b;
+}
+
+glm::ivec3 getPixelVal(int ind) {
+    return glm::ivec3(PIXELS[ind*3], PIXELS[ind*3 + 1], PIXELS[ind*3 + 2]);
 }
 
 glm::vec2 directionFromAngle(float angle) {
@@ -349,7 +390,17 @@ void castRaysFromCamera() {
 
     }
 
+    glm::vec2 viewRayDir = directionFromAngle(cameraAngle);
+    glm::vec2 viewTestSpot = cameraPosition;
+    for(float viewRay = 0.0f; viewRay < 3.1f; viewRay+=0.1f) {
+        viewTestSpot += viewRayDir * 0.1f;
+        glm::vec2 rounded(std::round(viewTestSpot.x), std::round(viewTestSpot.y));
+        if(sampleMap(rounded.x, rounded.y) != 0 || viewRay >= 3.0f) {
+            viewedBlock = rounded;
+            break;
+        }
 
+    }
     for(int col = 0; col < WIDTH; col++) {
 
         std::stack<HitPoint> drawQueue;
@@ -373,10 +424,36 @@ void castRaysFromCamera() {
             testSpot = cameraPosition;
         for(float i = 0; i < VIEWDISTANCE; i += RAYSTEP) {
              testSpot += (rayDir * RAYSTEP);
-            int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
-            
-            hit = sampled;
+             
+
             travel+=RAYSTEP;
+
+            if(BUILDMODE) {
+
+                if(glm::vec2(std::round(testSpot.x), std::round(testSpot.y)) == viewedBlock) {
+                    drawQueue.push(HitPoint{
+                        1,
+                        travel,
+                        testSpot,
+                        glm::vec2(std::round(testSpot.x), std::round(testSpot.y)),
+                        lastSpotBeforeHit
+                    });
+                    int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
+                    if(sampled == 0) {
+                        while(glm::vec2(std::round(testSpot.x), std::round(testSpot.y)) == viewedBlock) {
+                            //push past the select cube yo
+                            testSpot += rayDir*0.01f;
+                            travel += 0.01f;
+                            i+=0.01f;
+                        }
+                    }
+                    
+                }
+            }
+
+            int sampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
+
+            hit = sampled;
 
             if(sampled != 0) {
 
@@ -385,9 +462,8 @@ void castRaysFromCamera() {
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
                     hitSpot = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
-                    if(col == WIDTH/2) {
-                        viewedBlock = hitSpot;
-                    }
+
+                    
                     while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
                         testSpot -= rayDir*0.001f;
                         travel -= 0.001f;
@@ -515,15 +591,31 @@ void castRaysFromCamera() {
                 int height = ( WALLHEIGHT / h.travel) / 2.0f;
 
                 int trav = 0;
-                for(int i = HEIGHT/2; i < HEIGHT; i++) {
+                for(int i = (HEIGHT/2) + 1; i < HEIGHT; i++) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
                         float uvY = 0.5f - (((float)trav/height) / 2.0f);
                         if(trav < height) {
                             
 
-                            glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, blockHere.transparent ? 4 : 3);
-                            if(color.r != -1) {
+                            if(blockHere.transparent) {
+                                glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
+                                if(color.a > 0) {
+                                    if(color.a == 255) {
+                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    } else {
+                                        glm::ivec3 existingColor = getPixelVal(ind);
+                                        existingColor.r = std::min(255, existingColor.r + (int)((float)glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
+                                        existingColor.g = std::min(255, existingColor.g + (int)((float)glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
+                                        existingColor.b = std::min(255, existingColor.b + (int)((float)glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
+                                        setPixel(ind, existingColor.r, existingColor.g, existingColor.b);
+                                    }
+
+                                    
+                                }
+                            } else
+                            {   
+                                glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, 3);
                                 setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                             }
                             
@@ -540,9 +632,24 @@ void castRaysFromCamera() {
                     if(ind != -1) {
                         float uvY = 0.5f + (((float)trav/height) / 2.0f);
                         if(trav < height) {
-                            glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, blockHere.transparent ? 4 : 3);
-                            if(color.r != -1)
+                            
+                            
+                            if(blockHere.transparent) {
+                                glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
+                                if(color.a > 0) {
+                                    if(color.a == 255) {
+                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    } else {
+                                        glm::ivec3 existingColor = getPixelVal(ind);
+                                        existingColor.r = std::min(255, existingColor.r + (int)((float)glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
+                                        existingColor.g = std::min(255, existingColor.g + (int)((float)glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
+                                        existingColor.b = std::min(255, existingColor.b + (int)((float)glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
+                                        setPixel(ind, existingColor.r, existingColor.g, existingColor.b);
+                                    }
+                                }
+                            } else
                             {   
+                                glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, 3);
                                 setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                             }
                                 
@@ -567,16 +674,32 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-        int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
-        if(mapInd != -1) {
-            MAP[mapInd] = 0;
+        if(mouseCaptured) {
+            if(BUILDMODE) {
+                int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
+                if(mapInd != -1) {
+                    MAP[mapInd] = 0;
+                }
+            }
+            
+        } else {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            mouseCaptured = true;
         }
-
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        mouseCaptured = true;
     }
-        
-
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+    {
+        if(mouseCaptured) {
+            if(BUILDMODE) {
+                int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
+                if(mapInd != -1) {
+                    if(MAP[mapInd] == 0) {
+                        MAP[mapInd] = blockTypesOrdered[blockTypeSelected].first;
+                    }
+                }
+            }
+        }
+    }
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
@@ -626,6 +749,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (key == GLFW_KEY_S) {
         backward = action;
     }
+    if (key == GLFW_KEY_B && action == 1) {
+        BUILDMODE = !BUILDMODE;
+        std::string build("Build Mode ");
+        build += BUILDMODE ? "ON" : "OFF";
+        textView.setTextNode("Test", build, glm::vec2(0.4f,-0.4f));
+    }
     if(key == GLFW_KEY_ESCAPE) {
         if(mouseCaptured && action == 1) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -638,6 +767,34 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         }
     }
         
+}
+
+void drawSelectedBlock() {
+    int squareWidth = 10;
+    int startX = (int)((float)WIDTH * 0.75f);
+    int startY = (int)((float)HEIGHT * 0.75f);
+
+    for(int y = 0; y < squareWidth; y++) {
+        for(int x = 0; x < squareWidth; x++) {
+            int index = (startY + y) * WIDTH + (startX + x);
+            float uvX = x / (float)squareWidth;
+            float uvY = y / (float)squareWidth;
+
+            if(blockTypesOrdered[blockTypeSelected].second.transparent) {
+                glm::vec4 color = colorWithAlphaFromUV(uvX, uvY, blockTypesOrdered[blockTypeSelected].second.texture);
+                glm::vec3 existingColor = getPixelVal(index);
+
+                existingColor.r = std::min(255, (int)(existingColor.r + color.r * (color.a / 255.0f)));
+                existingColor.g = std::min(255, (int)(existingColor.g + color.g * (color.a / 255.0f)));
+                existingColor.b = std::min(255, (int)(existingColor.b + color.b * (color.a / 255.0f)));
+
+                setPixel(index, existingColor.r, existingColor.g, existingColor.b);
+            } else {
+                glm::vec3 color = colorFromUV(uvX, uvY, blockTypesOrdered[blockTypeSelected].second.texture, 3);
+                setPixel(index, color.r, color.g, color.b);
+            }
+        }
+    }
 }
 
 
@@ -666,6 +823,7 @@ int main() {
     glfwSetMouseButtonCallback(WINDOW, mouse_button_callback);
     glfwSetCursorPosCallback(WINDOW, cursor_position_callback);
     glfwSetKeyCallback(WINDOW, key_callback);
+    glfwSetScrollCallback(WINDOW, scroll_callback);
 
     std::string vertexShaderSrc;
     std::string fragmentShaderSrc;
@@ -711,8 +869,9 @@ int main() {
     };
 
 
-    GLuint VAO, VBO;
+    GLuint VAO, VAO2, VBO;
     glGenVertexArrays(1, &VAO);
+    glGenVertexArrays(1, &VAO2);
     glGenBuffers(1, &VBO);
 
     glBindVertexArray(VAO);
@@ -729,13 +888,21 @@ int main() {
     glEnableVertexAttribArray(tex_attrib);
     glVertexAttribPointer(tex_attrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
-    glUseProgram(SHADER_PROG1);
+    
 
     loadTexture();
+    blockTypesOrdered = std::vector<std::pair<int, BlockType>>(blockTypes.begin(), blockTypes.end());
+    
+    textView.create();
 
-
+    textView.windowHeight = SHEIGHT;
+    textView.windowWidth = SWIDTH;
+    textView.setTextNode("Test", "Build Mode OFF", glm::vec2(0.4f,-0.4f));
 
     while(!glfwWindowShouldClose(WINDOW)) {
+        glBindVertexArray(VAO);
+        glUseProgram(SHADER_PROG1);
+        glBindTexture(GL_TEXTURE_2D, TEXTURE_ID);
 
         GLuint yoloc = glGetUniformLocation(SHADER_PROG1, "yOffset");
         glUniform1f(yoloc, yOffset);
@@ -746,9 +913,16 @@ int main() {
         updateTime();
         castRaysFromCamera();
 
+        drawSelectedBlock();
+
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, PIXELS);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        glBindVertexArray(VAO2);
+        
+        textView.display();
+
 
         glfwSwapBuffers(WINDOW);
         glfwPollEvents();
