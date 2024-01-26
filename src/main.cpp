@@ -28,6 +28,47 @@
 #include "crossmesh.h"
 #include <optional>
 
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+
+glm::vec2 cameraPosition = glm::vec2(0,0);
+float cameraAngle = 0.0f;
+
+void saveCameraPosition() {
+    std::ofstream file("assets/camerasave", std::ios::trunc);
+    file << cameraPosition.x << " " << cameraPosition.y << "\n";
+    file << cameraAngle << "\n";
+}
+
+void loadSavedCameraPosition() {
+    if(std::filesystem::exists("assets/camerasave")) {
+        std::ifstream file("assets/camerasave");
+        std::string line;
+        int lineIndex = 0;
+        while(std::getline(file, line)) {
+            std::istringstream linestream(line);
+            std::string word;
+            int localIndex = 0;
+            while(linestream >> word) {
+                if(lineIndex == 0) {
+                    if(localIndex == 0) {
+                        cameraPosition.x = std::stof(word);
+                    }
+                    if(localIndex == 1) {
+                        cameraPosition.y = std::stof(word);
+                    }
+                 }
+                 if(lineIndex == 1) {
+                    cameraAngle = std::stof(word);
+                 }
+                localIndex++;
+            }
+            lineIndex++;
+        }
+    }
+}
+
 TextView textView;
 
 
@@ -57,8 +98,10 @@ GLFWwindow * WINDOW;
 GLuint SHADER_PROG1;
 GLuint TEXTURE_ID;
 
+float FOVMULTIPLIER = 1.6f;
 
-float MAXIMUMYSHEAR = 0.0f;
+
+float MAXIMUMYSHEAR = 0.3f;
 
 bool BUILDMODE = false;
 
@@ -69,7 +112,7 @@ const int WIDTH = 320;
 const int HEIGHT = 180;
 
 
-float WALLHEIGHT = (float)HEIGHT;
+float WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
 
 const int NUMCHANNELS = 3;
 
@@ -269,8 +312,7 @@ glm::ivec4 colorWithAlphaFromUV(float uvX, float uvY, GLubyte* texture) {
     return glm::ivec4(texture[realIndex], texture[realIndex+1], texture[realIndex+2], texture[realIndex+3]);
 }
 
-glm::vec2 cameraPosition = glm::vec2(0,0);
-float cameraAngle = 0.0f;
+
 
 void setPixel(int ind, GLubyte r,GLubyte g,GLubyte b) {
     PIXELS[ind*3] = r;
@@ -396,6 +438,8 @@ void castRaysFromCamera() {
         //now y means actual y
         float angle = ((((row - (HEIGHT / 2)) / (HEIGHT/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
 
+        angle *= FOVMULTIPLIER;
+
         glm::vec3 rayDir(cameraDirection.x, angle, cameraDirection.y);
         rayDir = glm::normalize(rayDir);
 
@@ -419,12 +463,12 @@ void castRaysFromCamera() {
 
         if(hit) {
 
-            static float FOV = std::acos(-1.0f)/2.0f/* your field of view in radians */;
+            float FOV = std::acos(-1.0f)/2.0f/* your field of view in radians */;
+            FOV *= FOVMULTIPLIER;
 
 
 
-
-            static float anglePerPixel = FOV / WIDTH;
+            float anglePerPixel = FOV / WIDTH;
 
             
             for(int i = 0; i < WIDTH; i++) {
@@ -467,6 +511,7 @@ void castRaysFromCamera() {
 
         float angle = ((((col - (WIDTH / 2)) / (WIDTH/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
 
+        angle *= FOVMULTIPLIER;
         //std::cout << angle << "\n";
         glm::vec2 rayDir = glm::normalize(directionFromAngle(angle + cameraAngle));
         //std::cout << rayDir.x << " " << rayDir.y << "\n";
@@ -482,11 +527,13 @@ void castRaysFromCamera() {
 
         static float RAYSTEP = 0.01f;
             testSpot = cameraPosition;
-        for(float i = 0; i < VIEWDISTANCE; i += RAYSTEP) {
+        for(float i = 0; i < VIEWDISTANCE + RAYSTEP; i += RAYSTEP) {
              testSpot += (rayDir * RAYSTEP);
              
 
             travel+=RAYSTEP;
+
+            
 
             if(BUILDMODE) {
 
@@ -548,6 +595,16 @@ void castRaysFromCamera() {
                             travel += 0.01f;
                             i+=0.01f;
                         }
+                        if(i >= VIEWDISTANCE) {
+                            drawQueue.push(HitPoint{
+                                    0,
+                                    travel,
+                                    testSpot,
+                                    hitSpot,
+                                    lastSpotBeforeHit
+                                });
+                            break;
+                        }
                     } else {
                     
                         // while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
@@ -589,6 +646,16 @@ void castRaysFromCamera() {
                                     cont = false;
                                 }
                             }
+                            if(i >= VIEWDISTANCE) {
+                                drawQueue.push(HitPoint{
+                                        0,
+                                        travel,
+                                        testSpot,
+                                        hitSpot,
+                                        lastSpotBeforeHit
+                                    });
+                                break;
+                            }
                         }
                     }
 
@@ -623,7 +690,7 @@ void castRaysFromCamera() {
         }
 
 
-
+        int dqSizeWas = drawQueue.size();
         //std::cout << drawQueue.size() << "\n";
         while(!drawQueue.empty())
         {
@@ -706,7 +773,7 @@ void castRaysFromCamera() {
                             if(blockHere.transparent) {
                                 glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
                                 if(color.a > 0) {
-                                    if(color.a == 255) {
+                                    if(color.a == 255 || dqSizeWas == 1) {
                                         setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
                                     } else {
                                         glm::ivec3 existingColor = getPixelVal(ind);
@@ -742,7 +809,7 @@ void castRaysFromCamera() {
                             if(blockHere.transparent) {
                                 glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
                                 if(color.a > 0) {
-                                    if(color.a == 255) {
+                                    if(color.a == 255 || dqSizeWas == 1) {
                                         setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                                     } else {
                                         glm::ivec3 existingColor = getPixelVal(ind);
@@ -884,6 +951,17 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             mouseCaptured = true;
         }
     }
+
+    if(key == GLFW_KEY_P) {
+        FOVMULTIPLIER += 0.01f;
+        WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
+        std::cout << std::to_string(FOVMULTIPLIER) << "\n";
+    }
+    if(key == GLFW_KEY_O) {
+        FOVMULTIPLIER -= 0.01f;
+        WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
+        std::cout << std::to_string(FOVMULTIPLIER) << "\n";
+    }
         
 }
 
@@ -1009,6 +1087,7 @@ int main() {
     
 
     loadTexture();
+    loadSavedCameraPosition();
     blockTypesOrdered = std::vector<std::pair<int, BlockType>>(blockTypes.begin(), blockTypes.end());
     
     textView.create();
@@ -1048,7 +1127,7 @@ int main() {
 
     //Save the map
     int saveResult = stbi_write_bmp("assets/map.bmp", MAPWIDTH, MAPWIDTH, 1, MAP);
-
+    saveCameraPosition();
 
     glfwDestroyWindow(WINDOW);
     glfwTerminate();
