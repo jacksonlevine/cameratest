@@ -141,6 +141,8 @@ GLubyte* glassTexture;
 GLubyte* selectTexture;
 GLubyte* plantTexture;
 
+GLubyte* flowerTexture;
+
 GLubyte* doorOpenTexture;
 
 GLubyte* doorClosedTexture;
@@ -237,7 +239,11 @@ void loadTexture() {
         std::cout << "Failed to load texture doorClosedTexture" << std::endl;
     }
 
-
+    flowerTexture = stbi_load("assets/flower.png", &width, &height, &nrChannels, 0);
+    if (!flowerTexture)
+    {
+        std::cout << "Failed to load texture flowerTexture" << std::endl;
+    }
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
@@ -274,6 +280,11 @@ void loadTexture() {
         doorOpenTexture,
         true,
         false
+    }},
+    {51, BlockType{
+        flowerTexture,
+        true,
+        true
     }}
 };
 }
@@ -993,7 +1004,10 @@ void drawSelectedBlock() {
     }
 }
 
-
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+}
 
 //Uncomment this stuff to remove console when done:
 //#include <Windows.h>
@@ -1006,7 +1020,6 @@ int main() {
 
 
     glfwInit();
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     if (!(WINDOW = glfwCreateWindow(SWIDTH, SHEIGHT, "RayTest", NULL, NULL))) {
         glfwTerminate();
         return EXIT_FAILURE;
@@ -1020,6 +1033,7 @@ int main() {
     glfwSetCursorPosCallback(WINDOW, cursor_position_callback);
     glfwSetKeyCallback(WINDOW, key_callback);
     glfwSetScrollCallback(WINDOW, scroll_callback);
+    glfwSetFramebufferSizeCallback(WINDOW, framebuffer_size_callback);
 
     std::string vertexShaderSrc;
     std::string fragmentShaderSrc;
