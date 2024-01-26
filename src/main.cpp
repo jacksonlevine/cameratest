@@ -22,12 +22,16 @@
 #include <map>
 #include <stack>
 
+#include "crossmesh.h"
+#include <optional>
+
 TextView textView;
 
 
 struct BlockType {
     GLubyte *texture;
     bool transparent;
+    bool isCrossMesh;
 };
 
 
@@ -89,6 +93,7 @@ GLubyte* floorTexture;
 GLubyte* plyWoodTexture;
 GLubyte* glassTexture;
 GLubyte* selectTexture;
+GLubyte* plantTexture;
 
 
 std::map<int, BlockType> blockTypes;
@@ -164,21 +169,36 @@ void loadTexture() {
         std::cout << "Failed to load texture selectTexture" << std::endl;
     }
 
+    plantTexture = stbi_load("assets/plant.png", &width, &height, &nrChannels, 0);
+    if (!plantTexture)
+    {
+        std::cout << "Failed to load texture plantTexture" << std::endl;
+    }
+
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
+        false,
         false
     }},
     {100, BlockType{
         plyWoodTexture,
+        false,
         false
     }},
     {150, BlockType{
         glassTexture,
-        true
+        true,
+        false
     }},
     {1, BlockType{
         selectTexture,
+        true,
+        false
+    }},
+    {50, BlockType{
+        plantTexture,
+        true,
         true
     }}
 };
@@ -280,7 +300,13 @@ float speedMult = 2.5f;
 
 LilCollisionCage collcage([](int x, int y){
     int samp = sampleMap(x,y);
-    return samp != -1 && samp != 0;
+    if(samp != 1 && samp != 0) {
+        if(blockTypes.at(samp).isCrossMesh) {
+            return false;
+        }
+        return true;
+    }
+    return false;
 });
 
 BoundingBox user(cameraPosition, glm::vec2(0,0));
@@ -291,6 +317,8 @@ struct HitPoint {
     glm::vec2 testSpot;
     glm::vec2 hitSpot;
     glm::vec2 lastSpotBeforeHit;
+    bool isCrossMesh = false;
+    std::optional<float> distFromCornerPoint = std::nullopt;
 };
 
 void castRaysFromCamera() {
@@ -442,6 +470,7 @@ void castRaysFromCamera() {
                     if(sampled == 0) {
                         while(glm::vec2(std::round(testSpot.x), std::round(testSpot.y)) == viewedBlock) {
                             //push past the select cube yo
+                            lastSpotBeforeHit = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
                             testSpot += rayDir*0.01f;
                             travel += 0.01f;
                             i+=0.01f;
@@ -459,38 +488,67 @@ void castRaysFromCamera() {
 
                 
                 if(sampled != -1) {
+
+                    
+
                     float rolledBack = 0.0f;
                     //std::cout << "travel was " << travel << "\n";
                     hitSpot = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
 
-                    
-                    while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
-                        testSpot -= rayDir*0.001f;
-                        travel -= 0.001f;
-                        rolledBack += 0.001f;
-                    }
-
-                    testSpot += rayDir*0.005f;
-                    //std::cout << "rolled back travel " << rolledBack << " to " << travel << "\n";
-                    //std::cout << "pushing " << sampled << "\n";
-                    drawQueue.push(HitPoint{
-                        sampled,
-                        travel,
-                        testSpot,
-                        hitSpot,
-                        lastSpotBeforeHit
-                    });
-
-                    if(!(blockTypes.at(sampled).transparent)) {
-                        break;
-                    } else {
-                        //push past this transparent (don't keep adding it)
-                        while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) == sampled) {
+                    if(blockTypes.at(sampled).isCrossMesh) {
+                        CrossMesh cmHere(hitSpot);
+                        std::vector<Intersection> intersections = cmHere.getIntersections(rayDir, cameraPosition);
+                        for(Intersection intersect : intersections) {
+                            drawQueue.push(HitPoint{
+                                sampled,
+                                intersect.travel,
+                                testSpot,
+                                hitSpot,
+                                lastSpotBeforeHit,
+                                true,
+                                intersect.distanceFromCornerPoint
+                            });
+                        }
+                        //push past this crossmesh (don't keep adding it)
+                        while (glm::vec2(std::round(testSpot.x), std::round(testSpot.y)) == hitSpot) {
+                            lastSpotBeforeHit = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
                             testSpot += rayDir*0.01f;
                             travel += 0.01f;
                             i+=0.01f;
                         }
+                    } else {
+                    
+                        // while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != 0 && sampleMap(std::round(testSpot.x), std::round(testSpot.y)) != -1) {
+                        //     testSpot -= rayDir*0.001f;
+                        //     travel -= 0.001f;
+                        //     rolledBack += 0.001f;
+                        // }
+
+                        // testSpot += rayDir*0.005f;
+                        //std::cout << "rolled back travel " << rolledBack << " to " << travel << "\n";
+                        //std::cout << "pushing " << sampled << "\n";
+                        drawQueue.push(HitPoint{
+                            sampled,
+                            travel,
+                            testSpot,
+                            hitSpot,
+                            lastSpotBeforeHit
+                        });
+
+                        if(!(blockTypes.at(sampled).transparent)) {
+                            break;
+                        } else {
+                            //push past this transparent (don't keep adding it)
+                            while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) == sampled) {
+                                lastSpotBeforeHit = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
+                                testSpot += rayDir*0.01f;
+                                travel += 0.01f;
+                                i+=0.01f;
+                            }
+                        }
                     }
+
+
                 } else {
                     //std::cout << "pushing " << sampled << "\n";
                     drawQueue.push(HitPoint{
@@ -536,7 +594,6 @@ void castRaysFromCamera() {
                 for(int i = HEIGHT/2; i < HEIGHT; i++) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
-                        float uvY = 0.5f - (((float)trav/height) / 2.0f);
                         if(trav < height) {
                             
 
@@ -552,7 +609,6 @@ void castRaysFromCamera() {
                 for(int i = HEIGHT/2; i > -1; i--) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
-                        float uvY = 0.5f + (((float)trav/height) / 2.0f);
                         if(trav < height) {
                             setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
                         } else {
@@ -579,11 +635,16 @@ void castRaysFromCamera() {
 
                 float uvX;
 
-                if (diffX > diffZ) {
-                    uvX = std::abs(zmod); 
+                if(!h.isCrossMesh) {
+                    if (diffX > diffZ) {
+                        uvX = std::abs(zmod); 
+                    } else {
+                        uvX = std::abs(xmod); 
+                    }
                 } else {
-                    uvX = std::abs(xmod); 
+                    uvX = h.distFromCornerPoint.value();
                 }
+                
 
 
                 //std::cout << "hit on col " << col << " with travel " << travel << "\n";'
@@ -602,7 +663,7 @@ void castRaysFromCamera() {
                                 glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
                                 if(color.a > 0) {
                                     if(color.a == 255) {
-                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
                                     } else {
                                         glm::ivec3 existingColor = getPixelVal(ind);
                                         existingColor.r = std::min(255, existingColor.r + (int)((float)glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
@@ -663,7 +724,6 @@ void castRaysFromCamera() {
             }
         }
     }
-
 }
 
 bool mouseCaptured = false;
