@@ -17,6 +17,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #include "collcage.h"
 
 #include <map>
@@ -1042,6 +1045,10 @@ int main() {
         glfwSwapBuffers(WINDOW);
         glfwPollEvents();
     }
+
+    //Save the map
+    int saveResult = stbi_write_bmp("assets/map.bmp", MAPWIDTH, MAPWIDTH, 1, MAP);
+
 
     glfwDestroyWindow(WINDOW);
     glfwTerminate();
