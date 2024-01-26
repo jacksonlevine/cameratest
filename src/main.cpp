@@ -95,6 +95,10 @@ GLubyte* glassTexture;
 GLubyte* selectTexture;
 GLubyte* plantTexture;
 
+GLubyte* doorOpenTexture;
+
+GLubyte* doorClosedTexture;
+
 
 std::map<int, BlockType> blockTypes;
 std::vector<std::pair<int, BlockType>> blockTypesOrdered;
@@ -175,6 +179,19 @@ void loadTexture() {
         std::cout << "Failed to load texture plantTexture" << std::endl;
     }
 
+    doorOpenTexture = stbi_load("assets/dooropen.png", &width, &height, &nrChannels, 0);
+    if (!doorOpenTexture)
+    {
+        std::cout << "Failed to load texture doorOpenTexture" << std::endl;
+    }
+
+    doorClosedTexture = stbi_load("assets/doorclosed.png", &width, &height, &nrChannels, 0);
+    if (!doorClosedTexture)
+    {
+        std::cout << "Failed to load texture doorClosedTexture" << std::endl;
+    }
+
+
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
@@ -200,6 +217,17 @@ void loadTexture() {
         plantTexture,
         true,
         true
+    }}
+    ,
+    {5, BlockType{
+        doorClosedTexture,
+        true,
+        false
+    }},
+    {6, BlockType{
+        doorOpenTexture,
+        true,
+        false
     }}
 };
 }
@@ -301,7 +329,7 @@ float speedMult = 2.5f;
 LilCollisionCage collcage([](int x, int y){
     int samp = sampleMap(x,y);
     if(samp != 1 && samp != 0) {
-        if(blockTypes.at(samp).isCrossMesh) {
+        if(blockTypes.at(samp).isCrossMesh || samp == 6) {
             return false;
         }
         return true;
@@ -429,6 +457,7 @@ void castRaysFromCamera() {
         }
 
     }
+
     for(int col = 0; col < WIDTH; col++) {
 
         std::stack<HitPoint> drawQueue;
@@ -539,11 +568,23 @@ void castRaysFromCamera() {
                             break;
                         } else {
                             //push past this transparent (don't keep adding it)
-                            while (sampleMap(std::round(testSpot.x), std::round(testSpot.y)) == sampled) {
+                            bool cont = true;
+                            while (cont) {
                                 lastSpotBeforeHit = glm::vec2(std::round(testSpot.x), std::round(testSpot.y));
                                 testSpot += rayDir*0.01f;
                                 travel += 0.01f;
                                 i+=0.01f;
+
+                                int newSampled = sampleMap(std::round(testSpot.x), std::round(testSpot.y));
+                                if(newSampled != -1 && newSampled != 0) {
+                                    if(newSampled == 5 || newSampled == 6 || newSampled == sampled) {
+                                        cont = true;
+                                    } else {
+                                        cont = false;
+                                    }
+                                } else {
+                                    cont = false;
+                                }
                             }
                         }
                     }
@@ -757,7 +798,21 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                         MAP[mapInd] = blockTypesOrdered[blockTypeSelected].first;
                     }
                 }
+            } else {
+                int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
+               
+                if(mapInd != -1) {
+                    if(MAP[mapInd] == 5) {
+                        MAP[mapInd] = 6;
+                    } else 
+                    if(MAP[mapInd] == 6) {
+                        MAP[mapInd] = 5;
+                    }
+                }
             }
+            
+            
+
         }
     }
 }
