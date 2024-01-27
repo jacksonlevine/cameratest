@@ -31,11 +31,14 @@
 #include <sstream>
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
 
 bool GOINGDOWN = false;
 bool GOINGUP = false;
 
 bool FUCKEDUP = false;
+
+int FURTHESTLOADED = -1;
 
 glm::vec2 cameraPosition = glm::vec2(0,0);
 float cameraAngle = 0.0f;
@@ -136,7 +139,7 @@ void updateTime() {
 }
 
 
-int LAYER = 1;
+int LAYER = 0;
 
 
 
@@ -172,9 +175,39 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     blockTypeSelected = std::max(0, std::min((int)blockTypesOrdered.size()-1, (int)(blockTypeSelected + yoffset)));
 }
 
-int MAPWIDTH;
+int MAPWIDTH = 100;
 
 GLubyte * MAP;
+
+std::vector<GLubyte *> MAPS;
+
+void loadMap(int layer) {
+    int width, height, nrChannels;
+    if(layer > FURTHESTLOADED) {
+        FURTHESTLOADED = layer;
+        std::string mapPath("assets/maps/map");
+        mapPath += std::to_string(layer) + ".bmp";
+        std::cout << "Checking for: " << mapPath << "\n";
+        if(std::filesystem::exists(mapPath)) {
+            std::cout << "Found it!" << "\n";
+            GLubyte * map = stbi_load(mapPath.c_str(), &width, &height, &nrChannels, 1);
+            MAPS.push_back(map);
+        } else {
+            GLubyte * map = new GLubyte[100*100];
+            for(int i = 0; i < 100; i++) {
+                for(int k = 0; k < 100; k++) {
+                    int ind = i * 100 + k;
+                    if((float)rand()/RAND_MAX > 0.8f) {
+                        map[ind] = 255;
+                    } else {
+                        map[ind] = 0;
+                    }
+                }
+            }
+            MAPS.push_back(map);
+        }
+    }
+}
 
 void loadTexture() {
 
@@ -416,11 +449,11 @@ int mapIndexFromCoord(int x, int z) {
 int sampleMap(int x, int z) {
     int test = mapIndexFromCoord(x,z);
     if(test != -1) {
-        if(blockTypes.find(MAP[test]) == blockTypes.end()) {
+        if(blockTypes.find(MAPS[LAYER][test]) == blockTypes.end()) {
                     //std::cout << "cleaning this \n";
-                    MAP[test] = 0;
+                    MAPS[LAYER][test] = 0;
         }
-        return MAP[test];
+        return MAPS[LAYER][test];
     } else {
         return -1;
     }
@@ -941,7 +974,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             if(BUILDMODE) {
                 int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                 if(mapInd != -1) {
-                    MAP[mapInd] = 0;
+                    MAPS[LAYER][mapInd] = 0;
                 }
             }
             
@@ -956,19 +989,19 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             if(BUILDMODE) {
                 int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                 if(mapInd != -1) {
-                    if(MAP[mapInd] == 0) {
-                        MAP[mapInd] = blockTypesOrdered[blockTypeSelected].first;
+                    if(MAPS[LAYER][mapInd] == 0) {
+                        MAPS[LAYER][mapInd] = blockTypesOrdered[blockTypeSelected].first;
                     }
                 }
             } else {
                 int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                
                 if(mapInd != -1) {
-                    if(MAP[mapInd] == 5) {
-                        MAP[mapInd] = 6;
+                    if(MAPS[LAYER][mapInd] == 5) {
+                        MAPS[LAYER][mapInd] = 6;
                     } else 
-                    if(MAP[mapInd] == 6) {
-                        MAP[mapInd] = 5;
+                    if(MAPS[LAYER][mapInd] == 6) {
+                        MAPS[LAYER][mapInd] = 5;
                     }
                 }
             }
@@ -1015,7 +1048,12 @@ void stepGoingDown() {
     static float goingDownTimer = 0.0f;
     static float gdTime = 0.5f;
     static bool incedLayer = false;
+    static bool loadedMap = false;
     if(GOINGDOWN) {
+        if(!loadedMap) {
+            loadMap(LAYER+1);
+            loadedMap = true;
+        }
         if(!phaseTwo) {
             if(goingDownTimer < gdTime) {
                 goingDownTimer += deltaTime;
@@ -1035,6 +1073,7 @@ void stepGoingDown() {
             } else {
                 goingDownTimer = 0.0f;
                 GOINGDOWN = false;
+                loadedMap = false;
                 FLOORLEVEL = 1.0f;
                 phaseTwo = false;
             }
@@ -1042,6 +1081,13 @@ void stepGoingDown() {
         
     }
     if(GOINGUP) {
+        if(!loadedMap) {
+            if(LAYER > 0) {
+                loadMap(LAYER-1);
+            }
+            
+            loadedMap = true;
+        }
         if(!phaseTwo) {
             if(goingDownTimer < gdTime) {
                 goingDownTimer += deltaTime;
@@ -1064,6 +1110,7 @@ void stepGoingDown() {
             } else {
                 goingDownTimer = 0.0f;
                 GOINGUP = false;
+                loadedMap = false;
                 FLOORLEVEL = 1.0f;
                 phaseTwo = false;
                 incedLayer = false;
@@ -1200,20 +1247,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 }
 
 
-void cleanMap() {
-
-    for(int i = 0; i < MAPWIDTH; i++) {
-        for(int k = 0; k < MAPWIDTH; k++) {
-            int ind = i * MAPWIDTH + k;
-            if(ind != -1 && ind < MAPWIDTH*MAPWIDTH) {
-                if(MAP[ind] != 0 && blockTypes.find(MAP[ind]) == blockTypes.end()) {
-                    std::cout << "cleaning this \n";
-                    MAP[ind] = 0;
-                }
-            }
-        }
-    }
-}
 
 
 //Uncomment this stuff to remove console when done:
@@ -1308,7 +1341,7 @@ int main() {
     
 
     loadTexture();
-    
+    loadMap(LAYER);
     //cleanMap();
 
     loadSavedCameraPosition();
@@ -1353,7 +1386,12 @@ int main() {
     }
 
     //Save the map
-    int saveResult = stbi_write_bmp("assets/map.bmp", MAPWIDTH, MAPWIDTH, 1, MAP);
+    //int saveResult = stbi_write_bmp("assets/map.bmp", MAPWIDTH, MAPWIDTH, 1, MAP);
+    for(int i = 0; i <= FURTHESTLOADED; i++) {
+        std::string mapPath("assets/maps/map");
+        mapPath += std::to_string(i) + ".bmp";
+        int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
+    }
     saveCameraPosition();
 
     glfwDestroyWindow(WINDOW);
