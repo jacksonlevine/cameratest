@@ -32,6 +32,8 @@
 #include <fstream>
 #include <filesystem>
 
+bool GOINGDOWN = false;
+
 glm::vec2 cameraPosition = glm::vec2(0,0);
 float cameraAngle = 0.0f;
 
@@ -93,6 +95,9 @@ int backward = 0;
 int left = 0;
 int right = 0;
 
+
+float FLOORLEVEL = 1.0f;
+
 GLFWwindow * WINDOW;
 
 GLuint SHADER_PROG1;
@@ -127,6 +132,11 @@ void updateTime() {
     lastFrame = currentFrame;
 }
 
+
+int LAYER = 0;
+
+
+
 glm::ivec3 BACKGROUNDCOLOR = glm::ivec3(90, 0, 150);
 
 GLubyte PIXELS[WIDTH * HEIGHT * NUMCHANNELS];
@@ -136,6 +146,7 @@ int nrChannels;
 int nrMapChannels;
 GLubyte* stoneWallTexture;
 GLubyte* floorTexture;
+GLubyte* groundTexture;
 GLubyte* plyWoodTexture;
 GLubyte* glassTexture;
 GLubyte* selectTexture;
@@ -146,6 +157,8 @@ GLubyte* flowerTexture;
 GLubyte* doorOpenTexture;
 
 GLubyte* doorClosedTexture;
+GLubyte* treeTexture;
+GLubyte* rockTexture;
 
 
 std::map<int, BlockType> blockTypes;
@@ -243,6 +256,21 @@ void loadTexture() {
     if (!flowerTexture)
     {
         std::cout << "Failed to load texture flowerTexture" << std::endl;
+    }
+    treeTexture = stbi_load("assets/tree.png", &width, &height, &nrChannels, 0);
+    if (!treeTexture)
+    {
+        std::cout << "Failed to load texture treeTexture" << std::endl;
+    }
+    groundTexture = stbi_load("assets/ground.png", &width, &height, &nrChannels, 0);
+    if (!groundTexture)
+    {
+        std::cout << "Failed to load texture groundTexture" << std::endl;
+    }
+    rockTexture = stbi_load("assets/rock.png", &width, &height, &nrChannels, 0);
+    if (!rockTexture)
+    {
+        std::cout << "Failed to load texture rockTexture" << std::endl;
     }
     blockTypes = {
     {255, BlockType{
@@ -362,6 +390,10 @@ int mapIndexFromCoord(int x, int z) {
 int sampleMap(int x, int z) {
     int test = mapIndexFromCoord(x,z);
     if(test != -1) {
+        if(blockTypes.find(MAP[test]) == blockTypes.end()) {
+                    //std::cout << "cleaning this \n";
+                    MAP[test] = 0;
+        }
         return MAP[test];
     } else {
         return -1;
@@ -380,7 +412,7 @@ int pixelIndexFromCoord(int x, int y) {
 
 float cameraY = 0.5f;
 
-float speedMult = 2.5f;
+float speedMult = 3.75f;
 
 LilCollisionCage collcage([](int x, int y){
     int samp = sampleMap(x,y);
@@ -447,7 +479,7 @@ void castRaysFromCamera() {
     for(int row = 0; row < HEIGHT; row++) {
 
         //now y means actual y
-        float angle = ((((row - (HEIGHT / 2)) / (HEIGHT/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f;
+        float angle = (((((row - (HEIGHT / 2)) / (HEIGHT/2.0f) + 1.0f) * std::acos(-1.0f)) / 4.0f) - std::acos(-1.0f)/4.0f) ;
 
         angle *= FOVMULTIPLIER;
 
@@ -459,13 +491,22 @@ void castRaysFromCamera() {
         glm::vec3 testSpot;
 
         bool hit = false;
+        bool sky = false;
         
         static float RAYSTEP = 0.01f;
 
         for(float i = 0; i < VIEWDISTANCE; i+= RAYSTEP) {
-            testSpot = glm::vec3(cameraPosition.x, cameraY, cameraPosition.y) + rayDir * i;
+            testSpot = glm::vec3(cameraPosition.x, cameraY + (FLOORLEVEL - 1.0f) * 0.75f, cameraPosition.y) + rayDir * i;
 
-            if(testSpot.y >= 1.0f || testSpot.y <= 0.0f) {
+            if(testSpot.y >= 1.0f) {
+                hit = true;
+                break;
+            }
+
+            if(testSpot.y <= 0.0f) {
+                if(LAYER == 0) {
+                    sky = true;
+                }
                 hit = true;
                 break;
             }
@@ -473,33 +514,44 @@ void castRaysFromCamera() {
         }
 
         if(hit) {
+            if(sky) {
 
-            float FOV = std::acos(-1.0f)/2.0f/* your field of view in radians */;
-            FOV *= FOVMULTIPLIER;
+                for(int i = 0; i < WIDTH; i++) {
+
+                    int ind = row * WIDTH + i;
+                    
+                    setPixel(ind, BACKGROUNDCOLOR.r, BACKGROUNDCOLOR.g, BACKGROUNDCOLOR.b);
+                }
+
+            }else {
+
+                float FOV = std::acos(-1.0f)/2.0f /* your field of view in radians */;
+                FOV *= FOVMULTIPLIER;
 
 
 
-            float anglePerPixel = FOV / WIDTH;
+                float anglePerPixel = FOV / WIDTH;
 
-            
-            for(int i = 0; i < WIDTH; i++) {
-
-                int ind = row * WIDTH + i;
-
-                float angleOffset = (i - WIDTH / 2.0f) * anglePerPixel;
-
-                glm::vec2 directionForPixel = directionFromAngle(cameraAngle + angleOffset);
-
-                glm::vec3 worldPosition = glm::vec3(cameraPosition.x, cameraY, cameraPosition.y) + glm::vec3(directionForPixel.x, 0, directionForPixel.y) * travel * 1.5f;
-
-                float uvX = std::abs(std::fmod(worldPosition.x, 1.0f));
-                float uvY = std::abs(std::fmod(worldPosition.z, 1.0f));
-
-                glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture, 3);
                 
-                setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, travel*1.5f/VIEWDISTANCE)));
-            }
+                for(int i = 0; i < WIDTH; i++) {
+
+                    int ind = row * WIDTH + i;
+
+                    float angleOffset = (i - WIDTH / 2.0f) * anglePerPixel;
+
+                    glm::vec2 directionForPixel = directionFromAngle(cameraAngle + angleOffset);
+
+                    glm::vec3 worldPosition = glm::vec3(cameraPosition.x, cameraY, cameraPosition.y) + glm::vec3(directionForPixel.x, 0, directionForPixel.y) * travel * 1.5f;
+
+                    float uvX = std::abs(std::fmod(worldPosition.x, 1.0f));
+                    float uvY = std::abs(std::fmod(worldPosition.z, 1.0f));
+
+                    glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture, 3);
+                    
+                    setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, travel*1.5f/VIEWDISTANCE)));
+                }
             //std::cout << travel << "\n";
+            }
         }
 
     }
@@ -708,12 +760,13 @@ void castRaysFromCamera() {
             HitPoint h = drawQueue.top();
 
             drawQueue.pop();
-
+            if(FLOORLEVEL < 1.66f) 
+            {
             if(h.type == 0 || h.type == -1) {
                 int height = ( WALLHEIGHT / h.travel) / 2.0f;
 
                 int trav = 0;
-                for(int i = HEIGHT/2; i < HEIGHT; i++) {
+                for(int i = HEIGHT/2  - (FLOORLEVEL - 1.0f) * (HEIGHT/(std::max(0.1f, h.travel)*2)); i < HEIGHT; i++) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
                         if(trav < height) {
@@ -728,7 +781,7 @@ void castRaysFromCamera() {
                     trav++;
                 }
                 trav = 0;
-                for(int i = HEIGHT/2; i > -1; i--) {
+                for(int i = HEIGHT/2 - (FLOORLEVEL - 1.0f) * (HEIGHT/(std::max(0.1f, h.travel)*2)); i > -1; i--) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
                         if(trav < height) {
@@ -774,7 +827,7 @@ void castRaysFromCamera() {
                 int height = ( WALLHEIGHT / h.travel) / 2.0f;
 
                 int trav = 0;
-                for(int i = (HEIGHT/2) + 1; i < HEIGHT; i++) {
+                for(int i = (HEIGHT/2)  - (FLOORLEVEL - 1.0f) * (HEIGHT/(std::max(0.1f, h.travel)*2)) + 1; i < HEIGHT; i++) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
                         float uvY = 0.5f - (((float)trav/height) / 2.0f);
@@ -810,7 +863,7 @@ void castRaysFromCamera() {
                     trav++;
                 }
                 trav = 0;
-                for(int i = HEIGHT/2; i > -1; i--) {
+                for(int i = HEIGHT/2  - (FLOORLEVEL - 1.0f) * (HEIGHT/(std::max(0.1f, h.travel)*2)); i > -1; i--) {
                     int ind = pixelIndexFromCoord(col, i);
                     if(ind != -1) {
                         float uvY = 0.5f + (((float)trav/height) / 2.0f);
@@ -821,7 +874,7 @@ void castRaysFromCamera() {
                                 glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
                                 if(color.a > 0) {
                                     if(color.a == 255 || dqSizeWas == 1) {
-                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
                                     } else {
                                         glm::ivec3 existingColor = getPixelVal(ind);
                                         existingColor.r = std::min(255, existingColor.r + (int)((float)glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
@@ -843,6 +896,7 @@ void castRaysFromCamera() {
                     }
                     trav++;
                 }
+            }
             }
         }
     }
@@ -926,6 +980,53 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     }
 }
 
+bool JUMPKEYHELD = false;
+bool JUMPING = false;
+
+void stepGoingDown() {
+    static float goingDownTimer = 0.0f;
+    static float gdTime = 1.0f;
+    if(GOINGDOWN) {
+        if(goingDownTimer < gdTime) {
+            goingDownTimer += deltaTime;
+            FLOORLEVEL = 1.0f + (goingDownTimer / gdTime);
+        } else {
+            goingDownTimer = 0.0f;
+            GOINGDOWN = false;
+            FLOORLEVEL = 1.0f;
+        }
+    }
+}
+
+void stepJumping() {
+    static float maxJumpHeight = 0.45f;
+    static float jumper = 0.0f;
+    static bool jumpHeightReached = false;
+    if(JUMPKEYHELD && !JUMPING) {
+        JUMPING = true;
+    }
+
+    if(JUMPING) {
+        if(jumper < maxJumpHeight && !jumpHeightReached) {
+            jumper += ((maxJumpHeight+0.1)-jumper) * deltaTime * 9.0f;
+        } else {
+            jumpHeightReached = true;
+        }
+
+        if(jumpHeightReached) {
+            if(jumper > 0.0f) {
+                jumper -= ((maxJumpHeight+0.1)-jumper) * deltaTime * 9.0f;
+            } else {
+                jumper = 0.0f;
+                jumpHeightReached = false;
+                JUMPING = false;
+            }
+        }
+
+        FLOORLEVEL = std::min(1.0f, 1.0f - jumper);
+    }
+}
+
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -962,30 +1063,38 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             mouseCaptured = true;
         }
     }
+    if(key == GLFW_KEY_P && action == 1) {
+        GOINGDOWN = true;
+    }
+    if(key == GLFW_KEY_SPACE) {
+        JUMPKEYHELD = action ? true : false;
+    }
 
-    if(key == GLFW_KEY_P) {
-        FOVMULTIPLIER += 0.01f;
-        WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
-        std::cout << std::to_string(FOVMULTIPLIER) << "\n";
-    }
-    if(key == GLFW_KEY_O) {
-        FOVMULTIPLIER -= 0.01f;
-        WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
-        std::cout << std::to_string(FOVMULTIPLIER) << "\n";
-    }
+    // if(key == GLFW_KEY_P) {
+    //     // FOVMULTIPLIER += 0.01f;
+    //     // WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
+    //     // std::cout << std::to_string(FOVMULTIPLIER) << "\n";
+    //     FLOORLEVEL += 0.01f;
+    // }
+    // if(key == GLFW_KEY_O) {
+    //     // FOVMULTIPLIER -= 0.01f;
+    //     // WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
+    //     // std::cout << std::to_string(FOVMULTIPLIER) << "\n";
+    //     FLOORLEVEL -= 0.01f;
+    // }
         
 }
 
 void drawSelectedBlock() {
     int squareWidth = 10;
     int startX = (int)((float)WIDTH * 0.75f);
-    int startY = (int)((float)HEIGHT * 0.75f);
+    int startY = (int)(((float)HEIGHT + yOffset * 100) * 0.75f);
 
     for(int y = 0; y < squareWidth; y++) {
         for(int x = 0; x < squareWidth; x++) {
             int index = (startY + y) * WIDTH + (startX + x);
             float uvX = x / (float)squareWidth;
-            float uvY = y / (float)squareWidth;
+            float uvY = 1.0f - y / (float)squareWidth;
 
             if(blockTypesOrdered[blockTypeSelected].second.transparent) {
                 glm::vec4 color = colorWithAlphaFromUV(uvX, uvY, blockTypesOrdered[blockTypeSelected].second.texture);
@@ -1008,6 +1117,23 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 }
+
+
+void cleanMap() {
+
+    for(int i = 0; i < MAPWIDTH; i++) {
+        for(int k = 0; k < MAPWIDTH; k++) {
+            int ind = i * MAPWIDTH + k;
+            if(ind != -1 && ind < MAPWIDTH*MAPWIDTH) {
+                if(MAP[ind] != 0 && blockTypes.find(MAP[ind]) == blockTypes.end()) {
+                    std::cout << "cleaning this \n";
+                    MAP[ind] = 0;
+                }
+            }
+        }
+    }
+}
+
 
 //Uncomment this stuff to remove console when done:
 //#include <Windows.h>
@@ -1101,6 +1227,9 @@ int main() {
     
 
     loadTexture();
+    
+    //cleanMap();
+
     loadSavedCameraPosition();
     blockTypesOrdered = std::vector<std::pair<int, BlockType>>(blockTypes.begin(), blockTypes.end());
     
@@ -1109,6 +1238,7 @@ int main() {
     textView.windowHeight = SHEIGHT;
     textView.windowWidth = SWIDTH;
     textView.setTextNode("Test", "Build Mode OFF", glm::vec2(0.4f,-0.4f));
+
 
     while(!glfwWindowShouldClose(WINDOW)) {
         glBindVertexArray(VAO);
@@ -1122,6 +1252,8 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         updateTime();
+        stepGoingDown();
+        stepJumping();
         castRaysFromCamera();
 
         drawSelectedBlock();
