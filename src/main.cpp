@@ -33,6 +33,9 @@
 #include <filesystem>
 
 bool GOINGDOWN = false;
+bool GOINGUP = false;
+
+bool FUCKEDUP = false;
 
 glm::vec2 cameraPosition = glm::vec2(0,0);
 float cameraAngle = 0.0f;
@@ -133,7 +136,7 @@ void updateTime() {
 }
 
 
-int LAYER = 0;
+int LAYER = 1;
 
 
 
@@ -317,9 +320,31 @@ void loadTexture() {
 };
 }
 
+glm::ivec3 fuckedUpColorFromUV(float uvX, float uvY, GLubyte* texture, int nrChannels) {
+    //assuming texture is always 32x32
 
+    int x = std::round(uvX * 31.0f);
+    int y = std::round((1.0f - uvY )* 31.0f);
+
+    int index = y * 32 + x;
+
+    int realIndex = index * nrChannels;
+    
+    if(nrChannels == 4) {
+        if(texture[realIndex+3] == 0) {
+            return glm::ivec3(-1,-1,-1);
+        }
+    }
+
+    return glm::ivec3(texture[realIndex+3072+(int)(glfwGetTime()*60.0f)%10000], texture[realIndex+3072+1+(int)(glfwGetTime()*60.0f)%10000], texture[realIndex+3072+2+(int)(glfwGetTime()*60.0f)%10000]);
+}
 
 glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture, int nrChannels) {
+
+    if(FUCKEDUP) {
+        return fuckedUpColorFromUV(uvX, uvY, texture, nrChannels);
+    }
+
     //assuming texture is always 32x32
 
     int x = std::round(uvX * 31.0f);
@@ -337,6 +362,7 @@ glm::ivec3 colorFromUV(float uvX, float uvY, GLubyte* texture, int nrChannels) {
 
     return glm::ivec3(texture[realIndex], texture[realIndex+1], texture[realIndex+2]);
 }
+
 
 glm::ivec4 colorWithAlphaFromUV(float uvX, float uvY, GLubyte* texture) {
     //assuming texture is always 32x32
@@ -443,20 +469,21 @@ void castRaysFromCamera() {
 
     glm::vec2 proposedPosition = cameraPosition;
 
-    if(right) {
-        
-        proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
+    if(!GOINGDOWN) {
+        if(right) {
+            
+            proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
+        }
+        if(left) {
+            proposedPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
+        }
+        if(forward) {
+            proposedPosition += directionFromAngle(cameraAngle)*speedMult*deltaTime;
+        }
+        if(backward) {
+            proposedPosition -= directionFromAngle(cameraAngle)*speedMult*deltaTime;
+        }
     }
-    if(left) {
-        proposedPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
-    }
-    if(forward) {
-        proposedPosition += directionFromAngle(cameraAngle)*speedMult*deltaTime;
-    }
-    if(backward) {
-        proposedPosition -= directionFromAngle(cameraAngle)*speedMult*deltaTime;
-    }
-
     std::vector<glm::vec2> correctionsMade;
 
     user.set_center(proposedPosition, 0.2f);
@@ -760,7 +787,7 @@ void castRaysFromCamera() {
             HitPoint h = drawQueue.top();
 
             drawQueue.pop();
-            if(FLOORLEVEL < 1.66f) 
+            if(FLOORLEVEL < 1.66f && FLOORLEVEL > 0.36f) 
             {
             if(h.type == 0 || h.type == -1) {
                 int height = ( WALLHEIGHT / h.travel) / 2.0f;
@@ -984,17 +1011,65 @@ bool JUMPKEYHELD = false;
 bool JUMPING = false;
 
 void stepGoingDown() {
+    static bool phaseTwo = false;
     static float goingDownTimer = 0.0f;
-    static float gdTime = 1.0f;
+    static float gdTime = 0.5f;
+    static bool incedLayer = false;
     if(GOINGDOWN) {
-        if(goingDownTimer < gdTime) {
-            goingDownTimer += deltaTime;
-            FLOORLEVEL = 1.0f + (goingDownTimer / gdTime);
-        } else {
-            goingDownTimer = 0.0f;
-            GOINGDOWN = false;
-            FLOORLEVEL = 1.0f;
+        if(!phaseTwo) {
+            if(goingDownTimer < gdTime) {
+                goingDownTimer += deltaTime;
+                FLOORLEVEL = 1.0f + (goingDownTimer / gdTime);
+            } else {
+                goingDownTimer = 0.0f;
+                //GOINGDOWN = false;
+                FLOORLEVEL = 0.0f;
+                LAYER += 1;
+                phaseTwo = true;
+            }
         }
+        if(phaseTwo) {
+            if(goingDownTimer < gdTime) {
+                goingDownTimer += deltaTime;
+                FLOORLEVEL = 0.0f + (goingDownTimer / gdTime);
+            } else {
+                goingDownTimer = 0.0f;
+                GOINGDOWN = false;
+                FLOORLEVEL = 1.0f;
+                phaseTwo = false;
+            }
+        }
+        
+    }
+    if(GOINGUP) {
+        if(!phaseTwo) {
+            if(goingDownTimer < gdTime) {
+                goingDownTimer += deltaTime;
+                FLOORLEVEL = 1.0f - (goingDownTimer / gdTime);
+            } else {
+                goingDownTimer = 0.0f;
+                //GOINGDOWN = false;
+                FLOORLEVEL = 2.0f;
+                phaseTwo = true;
+            }
+        }
+        if(phaseTwo) {
+            if(goingDownTimer < gdTime) {
+                goingDownTimer += deltaTime;
+                FLOORLEVEL = 2.0f - (goingDownTimer / gdTime);
+                if(goingDownTimer / gdTime > 0.3 && !incedLayer) {
+                    LAYER -= 1;
+                    incedLayer = true;
+                }
+            } else {
+                goingDownTimer = 0.0f;
+                GOINGUP = false;
+                FLOORLEVEL = 1.0f;
+                phaseTwo = false;
+                incedLayer = false;
+            }
+        }
+        
     }
 }
 
@@ -1063,11 +1138,17 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             mouseCaptured = true;
         }
     }
-    if(key == GLFW_KEY_P && action == 1) {
+    if(key == GLFW_KEY_P && action == 1 && !GOINGUP) {
         GOINGDOWN = true;
+    }
+    if(key == GLFW_KEY_O && action == 1 && !GOINGDOWN && LAYER > 0) {
+        GOINGUP = true;
     }
     if(key == GLFW_KEY_SPACE) {
         JUMPKEYHELD = action ? true : false;
+    }
+    if(key == GLFW_KEY_EQUAL && action == 1) {
+        FUCKEDUP = !FUCKEDUP;
     }
 
     // if(key == GLFW_KEY_P) {
