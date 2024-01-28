@@ -13,8 +13,4 @@ cd ..
 
 ResourceHacker.exe -open main.exe -save main.exe -action addskip -res assets/icon.ico -mask ICONGROUP,MAINICON,
 
-del "CameraTest.exe"
-
-ren main.exe "CameraTest.exe"
-
 pause

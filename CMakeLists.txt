@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 # set the project name
-project(cameratest)
+project(mimodo)
 
 
 # specify the C++ standard

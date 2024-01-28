@@ -57,11 +57,17 @@ void loadMap(int layer) {
     int width, height, nrChannels;
     if(layer > FURTHESTLOADED) {
         FURTHESTLOADED = layer;
-        std::string mapPath("assets/maps/map");
+        std::string mapPath("maps/map");
         mapPath += std::to_string(layer) + ".bmp";
-        std::cout << "Checking for: " << mapPath << "\n";
+        //std::cout << "Checking for: " << mapPath << "\n";
+
+        std::filesystem::path dir("maps");
+        if (!std::filesystem::exists(dir)) {
+            std::filesystem::create_directory(dir); // or create_directories(dir) if you might have nested directories
+        }
+
         if(std::filesystem::exists(mapPath)) {
-            std::cout << "Found it!" << "\n";
+            //std::cout << "Found it!" << "\n";
             GLubyte * map = stbi_load(mapPath.c_str(), &width, &height, &nrChannels, 1);
             MAPS.push_back(map);
         } else {
@@ -231,7 +237,7 @@ void loadTexture() {
     stoneWallTexture = stbi_load("assets/stonewall.png", &width, &height, &nrChannels, 0);
     if (stoneWallTexture)
     {
-        std::cout << "channels: " << nrChannels << "\n";
+        //std::cout << "channels: " << nrChannels << "\n";
     }
     else
     {
@@ -243,7 +249,7 @@ void loadTexture() {
     assert(nrMapChannels == 1);
     if (MAP)
     {
-        std::cout << "channels: " << nrMapChannels << "\n";
+        //std::cout << "channels: " << nrMapChannels << "\n";
     }
     else
     {
@@ -253,7 +259,7 @@ void loadTexture() {
     floorTexture = stbi_load("assets/floor.png", &width, &height, &nrChannels, 0);
     if (floorTexture)
     {
-        std::cout << "channels: " << nrChannels << "\n";
+        //std::cout << "channels: " << nrChannels << "\n";
     }
     else
     {
@@ -263,7 +269,7 @@ void loadTexture() {
     plyWoodTexture = stbi_load("assets/plywood.png", &width, &height, &nrChannels, 0);
     if (plyWoodTexture)
     {
-        std::cout << "channels: " << nrChannels << "\n";
+        //std::cout << "channels: " << nrChannels << "\n";
     }
     else
     {
@@ -273,7 +279,7 @@ void loadTexture() {
     glassTexture = stbi_load("assets/glass.png", &width, &height, &nrChannels, 0);
     if (glassTexture)
     {
-        std::cout << "glass channels: " << nrChannels << "\n";
+        //std::cout << "glass channels: " << nrChannels << "\n";
     }
     else
     {
@@ -555,7 +561,6 @@ void castRaysFromCamera() {
 
     if(!GOINGDOWN && !GOINGUP) {
         if(right) {
-            
             proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
         }
         if(left) {
@@ -1512,7 +1517,7 @@ int main() {
     //Save the map
     //int saveResult = stbi_write_bmp("assets/map.bmp", MAPWIDTH, MAPWIDTH, 1, MAP);
     for(int i = 0; i <= FURTHESTLOADED; i++) {
-        std::string mapPath("assets/maps/map");
+        std::string mapPath("maps/map");
         mapPath += std::to_string(i) + ".bmp";
         int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
     }

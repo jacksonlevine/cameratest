@@ -1,2 +1,2 @@
-CameraTest.exe
+main.exe
 pause
