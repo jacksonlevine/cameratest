@@ -553,7 +553,7 @@ void castRaysFromCamera() {
 
     glm::vec2 proposedPosition = cameraPosition;
 
-    if(!GOINGDOWN) {
+    if(!GOINGDOWN && !GOINGUP) {
         if(right) {
             
             proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
