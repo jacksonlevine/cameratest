@@ -244,17 +244,6 @@ void loadTexture() {
         std::cout << "Failed to load texture stonewall" << std::endl;
     }
 
-    MAP = stbi_load("assets/map.bmp", &MAPWIDTH, &height, &nrMapChannels, 1);
-    assert(MAPWIDTH == height);
-    assert(nrMapChannels == 1);
-    if (MAP)
-    {
-        //std::cout << "channels: " << nrMapChannels << "\n";
-    }
-    else
-    {
-        std::cout << "Failed to load texture map" << std::endl;
-    }
 
     floorTexture = stbi_load("assets/floor.png", &width, &height, &nrChannels, 0);
     if (floorTexture)
@@ -1383,11 +1372,18 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 int main() {
 
 
-
+    std::cout << std::filesystem::current_path() << "\n";
 
 
 
     glfwInit();
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    #ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Necessary for macOS
+    #endif
     if (!(WINDOW = glfwCreateWindow(SWIDTH, SHEIGHT, "RayTest", NULL, NULL))) {
         glfwTerminate();
         return EXIT_FAILURE;

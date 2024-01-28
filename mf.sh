@@ -5,7 +5,7 @@ mkdir -p build
 cd build
 
 # Run CMake with macOS-specific toolchain file and target triplet
-cmake -DCMAKE_TOOLCHAIN_FILE=~/Documents/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-osx ..
+cmake -DCMAKE_TOOLCHAIN_FILE=~/Documents/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=arm64-osx -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=native" ..
 
 # Build the project
 if cmake --build . --config Release; then
@@ -17,7 +17,7 @@ else
 fi
 
 # Copy the executable to the parent directory
-cp -f Release/main ..
+cp -f main ..
 
 # Return to the original directory
 cd ..
