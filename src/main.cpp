@@ -40,13 +40,56 @@ bool FUCKEDUP = false;
 
 int FURTHESTLOADED = -1;
 
+
+int LAYER = 0;
+
+
 glm::vec2 cameraPosition = glm::vec2(0,0);
 float cameraAngle = 0.0f;
+
+int MAPWIDTH = 100;
+
+GLubyte * MAP;
+
+std::vector<GLubyte *> MAPS;
+
+void loadMap(int layer) {
+    int width, height, nrChannels;
+    if(layer > FURTHESTLOADED) {
+        FURTHESTLOADED = layer;
+        std::string mapPath("assets/maps/map");
+        mapPath += std::to_string(layer) + ".bmp";
+        std::cout << "Checking for: " << mapPath << "\n";
+        if(std::filesystem::exists(mapPath)) {
+            std::cout << "Found it!" << "\n";
+            GLubyte * map = stbi_load(mapPath.c_str(), &width, &height, &nrChannels, 1);
+            MAPS.push_back(map);
+        } else {
+            GLubyte * map = new GLubyte[100*100];
+            for(int i = 0; i < 100; i++) {
+                for(int k = 0; k < 100; k++) {
+                    int ind = i * 100 + k;
+                    if((float)rand()/RAND_MAX > 0.8f) {
+                        map[ind] = 53;
+                    } else
+                    if((float)rand()/RAND_MAX > 0.99f) {
+                        map[ind] = 54;
+                    } else {
+                        map[ind] = 0;
+                    }
+                }
+            }
+            MAPS.push_back(map);
+        }
+    }
+}
+
 
 void saveCameraPosition() {
     std::ofstream file("assets/camerasave", std::ios::trunc);
     file << cameraPosition.x << " " << cameraPosition.y << "\n";
     file << cameraAngle << "\n";
+    file << LAYER << "\n";
 }
 
 void loadSavedCameraPosition() {
@@ -69,6 +112,12 @@ void loadSavedCameraPosition() {
                  }
                  if(lineIndex == 1) {
                     cameraAngle = std::stof(word);
+                 }
+                 if(lineIndex == 2) {
+                    LAYER = std::stoi(word);
+                    for(int i = 0; i < LAYER; ++i) {
+                        loadMap(i);
+                    }
                  }
                 localIndex++;
             }
@@ -139,8 +188,6 @@ void updateTime() {
 }
 
 
-int LAYER = 0;
-
 
 
 glm::ivec3 BACKGROUNDCOLOR = glm::ivec3(90, 0, 150);
@@ -165,7 +212,9 @@ GLubyte* doorOpenTexture;
 GLubyte* doorClosedTexture;
 GLubyte* treeTexture;
 GLubyte* rockTexture;
-
+GLubyte* ladderTexture;
+GLubyte* rubyTexture;
+GLubyte* rubyGemTexture;
 
 std::map<int, BlockType> blockTypes;
 std::vector<std::pair<int, BlockType>> blockTypesOrdered;
@@ -175,39 +224,6 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     blockTypeSelected = std::max(0, std::min((int)blockTypesOrdered.size()-1, (int)(blockTypeSelected + yoffset)));
 }
 
-int MAPWIDTH = 100;
-
-GLubyte * MAP;
-
-std::vector<GLubyte *> MAPS;
-
-void loadMap(int layer) {
-    int width, height, nrChannels;
-    if(layer > FURTHESTLOADED) {
-        FURTHESTLOADED = layer;
-        std::string mapPath("assets/maps/map");
-        mapPath += std::to_string(layer) + ".bmp";
-        std::cout << "Checking for: " << mapPath << "\n";
-        if(std::filesystem::exists(mapPath)) {
-            std::cout << "Found it!" << "\n";
-            GLubyte * map = stbi_load(mapPath.c_str(), &width, &height, &nrChannels, 1);
-            MAPS.push_back(map);
-        } else {
-            GLubyte * map = new GLubyte[100*100];
-            for(int i = 0; i < 100; i++) {
-                for(int k = 0; k < 100; k++) {
-                    int ind = i * 100 + k;
-                    if((float)rand()/RAND_MAX > 0.8f) {
-                        map[ind] = 255;
-                    } else {
-                        map[ind] = 0;
-                    }
-                }
-            }
-            MAPS.push_back(map);
-        }
-    }
-}
 
 void loadTexture() {
 
@@ -308,6 +324,21 @@ void loadTexture() {
     {
         std::cout << "Failed to load texture rockTexture" << std::endl;
     }
+    ladderTexture = stbi_load("assets/ladder.png", &width, &height, &nrChannels, 0);
+    if (!ladderTexture)
+    {
+        std::cout << "Failed to load texture ladderTexture" << std::endl;
+    }
+    rubyTexture = stbi_load("assets/rubyore.png", &width, &height, &nrChannels, 0);
+    if (!rubyTexture)
+    {
+        std::cout << "Failed to load texture rubyTexture" << std::endl;
+    }
+    rubyGemTexture = stbi_load("assets/ruby.png", &width, &height, &nrChannels, 0);
+    if (!rubyGemTexture)
+    {
+        std::cout << "Failed to load texture rubyGemTexture" << std::endl;
+    }
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
@@ -347,6 +378,26 @@ void loadTexture() {
     }},
     {51, BlockType{
         flowerTexture,
+        true,
+        true
+    }},
+    {52, BlockType{
+        ladderTexture,
+        true,
+        true
+    }},
+    {53, BlockType{
+        floorTexture,
+        false,
+        false
+    }},
+    {54, BlockType{
+        rubyTexture,
+        false,
+        false
+    }},
+    {55, BlockType{
+        rubyGemTexture,
         true,
         true
     }}
@@ -552,6 +603,8 @@ void castRaysFromCamera() {
 
         bool hit = false;
         bool sky = false;
+
+        bool top = false;
         
         static float RAYSTEP = 0.01f;
 
@@ -567,6 +620,7 @@ void castRaysFromCamera() {
                 if(LAYER == 0) {
                     sky = true;
                 }
+                top = true;
                 hit = true;
                 break;
             }
@@ -606,7 +660,42 @@ void castRaysFromCamera() {
                     float uvX = std::abs(std::fmod(worldPosition.x, 1.0f));
                     float uvY = std::abs(std::fmod(worldPosition.z, 1.0f));
 
-                    glm::ivec3 color = colorFromUV(uvX, uvY, floorTexture, 3);
+                    glm::vec2 worldTile(std::round(worldPosition.x), std::round(worldPosition.z));
+                    int tile = sampleMap(worldTile.x, worldTile.y);
+                    
+                    
+
+                    glm::ivec3 color;
+                    if(tile == 52) {
+                        
+                        if(top) {
+                            if(LAYER > 0) {
+                                loadMap(LAYER-1);
+                                int tileAbove = MAPS[LAYER-1][mapIndexFromCoord(worldTile.x, worldTile.y)];
+                                
+                                if(tileAbove == 52 || tileAbove == 0) {
+                                    color = glm::ivec3(0,0,0);
+                                } else {
+                                    color = colorFromUV(uvX, uvY, floorTexture, 3);
+                                }
+                            }
+                            
+                        }else {
+                            loadMap(LAYER+1);
+                            int tileBelow = MAPS[LAYER+1][mapIndexFromCoord(worldTile.x, worldTile.y)];
+                            
+                            if(tileBelow == 52 || tileBelow == 0) {
+                                color = glm::ivec3(0,0,0);
+                            } else {
+                                color = colorFromUV(uvX, uvY, floorTexture, 3);
+                            }
+                        }
+                        
+                    } else {
+                        color = colorFromUV(uvX, uvY, floorTexture, 3);
+                    }
+
+                    
                     
                     setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.g, BACKGROUNDCOLOR.g, std::min(1.0f, travel*1.5f/VIEWDISTANCE)), glm::mix(color.b, BACKGROUNDCOLOR.b, std::min(1.0f, travel*1.5f/VIEWDISTANCE)));
                 }
@@ -990,7 +1079,15 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                 int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                 if(mapInd != -1) {
                     if(MAPS[LAYER][mapInd] == 0) {
-                        MAPS[LAYER][mapInd] = blockTypesOrdered[blockTypeSelected].first;
+                        if(blockTypesOrdered[blockTypeSelected].first == 52) {
+                            loadMap(LAYER + 1);
+                            if(MAPS[LAYER+1][mapInd] == 0 || MAPS[LAYER+1][mapInd] == 52) {
+                                MAPS[LAYER][mapInd] = 52;
+                            }
+                        } else {
+                            MAPS[LAYER][mapInd] = blockTypesOrdered[blockTypeSelected].first;
+                        }
+                        
                     }
                 }
             } else {
@@ -1051,7 +1148,13 @@ void stepGoingDown() {
     static bool loadedMap = false;
     if(GOINGDOWN) {
         if(!loadedMap) {
+            glm::ivec2 cameraTile(std::round(cameraPosition.x), std::round(cameraPosition.y));
+            int mapInd = mapIndexFromCoord(cameraTile.x, cameraTile.y);
+
             loadMap(LAYER+1);
+
+            MAPS[LAYER+1][mapInd] = 52;
+            //std::cout << "Set 52 at mapind " << std::to_string(mapInd) << " on level " << std::to_string(LAYER+1) << "\n";
             loadedMap = true;
         }
         if(!phaseTwo) {
@@ -1082,8 +1185,11 @@ void stepGoingDown() {
     }
     if(GOINGUP) {
         if(!loadedMap) {
+            glm::ivec2 cameraTile(std::round(cameraPosition.x), std::round(cameraPosition.y));
+            int mapInd = mapIndexFromCoord(cameraTile.x, cameraTile.y);
             if(LAYER > 0) {
                 loadMap(LAYER-1);
+                MAPS[LAYER-1][mapInd] = 52;
             }
             
             loadedMap = true;
@@ -1185,15 +1291,32 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             mouseCaptured = true;
         }
     }
-    if(key == GLFW_KEY_P && action == 1 && !GOINGUP) {
-        GOINGDOWN = true;
-    }
-    if(key == GLFW_KEY_O && action == 1 && !GOINGDOWN && LAYER > 0) {
-        GOINGUP = true;
+    if((key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT) && action == 1 && !GOINGUP) {
+        glm::ivec2 cameraTile(std::round(cameraPosition.x), std::round(cameraPosition.y));
+        int tile = sampleMap(cameraTile.x, cameraTile.y);
+        if(tile == 52) {
+            loadMap(LAYER+1);
+            if(MAPS[LAYER+1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 0 || MAPS[LAYER+1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 52)
+            GOINGDOWN = true;
+        }
     }
     if(key == GLFW_KEY_SPACE) {
-        JUMPKEYHELD = action ? true : false;
+        glm::ivec2 cameraTile(std::round(cameraPosition.x), std::round(cameraPosition.y));
+        int tile = sampleMap(cameraTile.x, cameraTile.y);
+        if(tile == 52 && LAYER > 0) {
+            if(action == 1 && !GOINGDOWN) {
+            
+            
+                loadMap(LAYER-1);
+                if(MAPS[LAYER-1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 0 || MAPS[LAYER-1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 52)
+                GOINGUP = true;
+            }
+        } else {
+            JUMPKEYHELD = action ? true : false;
+        }
+        
     }
+    
     if(key == GLFW_KEY_EQUAL && action == 1) {
         FUCKEDUP = !FUCKEDUP;
     }
@@ -1341,10 +1464,11 @@ int main() {
     
 
     loadTexture();
+    loadSavedCameraPosition();
     loadMap(LAYER);
     //cleanMap();
 
-    loadSavedCameraPosition();
+    
     blockTypesOrdered = std::vector<std::pair<int, BlockType>>(blockTypes.begin(), blockTypes.end());
     
     textView.create();
