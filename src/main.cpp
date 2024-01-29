@@ -227,6 +227,12 @@ std::vector<std::pair<int, BlockType>> blockTypesOrdered;
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
+    if(yoffset > 0) {
+        yoffset = 1;
+    }
+    if(yoffset < 0) {
+        yoffset = -1;
+    }
     blockTypeSelected = std::max(0, std::min((int)blockTypesOrdered.size()-1, (int)(blockTypeSelected + yoffset)));
 }
 
