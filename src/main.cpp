@@ -1669,8 +1669,8 @@ int main() {
 
     Pa_Initialize();
 
-    audioData1 = loadAudioFile("assets/song1.wav");
-    audioData2 = loadAudioFile("assets/song2.wav");
+    audioData1 = loadAudioFile("assets/song1.mp3");
+    audioData2 = loadAudioFile("assets/song2.mp3");
 
     PaStream* stream;
     PaStreamParameters outputParameters;
