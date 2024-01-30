@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 
-add_executable(main src/main.cpp src/collcage.cpp src/glyphface.cpp src/textview.cpp src/crossmesh.cpp)
+add_executable(main src/main.cpp src/collcage.cpp src/glyphface.cpp src/textview.cpp src/crossmesh.cpp src/textureface.cpp src/guielement.cpp)
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
@@ -19,6 +19,12 @@ endif()
 
 
 target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
+  find_package(portaudio CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE portaudio_static)
+  find_package(SndFile CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE SndFile::sndfile)
+
 
 find_package(glfw3 CONFIG REQUIRED)
 target_link_libraries(main PRIVATE glfw)
