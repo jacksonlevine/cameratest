@@ -41,6 +41,7 @@
 int sampleRate = 0;
 int channels = 0;
 
+
 std::vector<float> loadAudioFile(const std::string& filename) {
     SF_INFO sfinfo;
     SNDFILE* sndfile = sf_open(filename.c_str(), SFM_READ, &sfinfo);
@@ -70,7 +71,15 @@ PaStream* stream;
 
 std::vector<float> audioData1; // First audio file data
 std::vector<float> audioData2; // Second audio file data
-bool condition = true; // The condition for switching audio files
+std::vector<float> audioData3;
+
+enum CurrentSong {
+    MAINMENU,
+    SHUFFLIN,
+    SHOP
+};
+
+CurrentSong currentSong;
 
 static int audioCallback(const void* inputBuffer, void* outputBuffer,
                          unsigned long framesPerBuffer,
@@ -80,16 +89,21 @@ static int audioCallback(const void* inputBuffer, void* outputBuffer,
     float* out = (float*)outputBuffer;
     static size_t dataIndex1 = 0;
     static size_t dataIndex2 = 0;
+    static size_t dataIndex3 = 0;
 
     for (size_t i = 0; i < framesPerBuffer; ++i) {
-        if (condition) {
+        if (currentSong == MAINMENU) {
             *out++ = audioData1[dataIndex1 * 2];     // Left channel
             *out++ = audioData1[dataIndex1 * 2 + 1]; // Right channel
             dataIndex1 = (dataIndex1 + 1) % (audioData1.size() / 2);
-        } else {
+        } else if(currentSong == SHUFFLIN) {
             *out++ = audioData2[dataIndex2 * 2];     // Left channel
             *out++ = audioData2[dataIndex2 * 2 + 1]; // Right channel
             dataIndex2 = (dataIndex2 + 1) % (audioData2.size() / 2);
+        } else if(currentSong == SHOP) {
+            *out++ = audioData3[dataIndex3 * 2];     // Left channel
+            *out++ = audioData3[dataIndex3 * 2 + 1]; // Right channel
+            dataIndex3 = (dataIndex3 + 1) % (audioData3.size() / 2);
         }
     }
     return paContinue;
@@ -125,6 +139,8 @@ float cameraAngle = 0.0f;
 int MAPWIDTH = 100;
 
 GLubyte * MAP;
+GLubyte * SHOPMAP;
+bool INSHOP = false;
 
 std::vector<GLubyte *> MAPS;
 
@@ -272,6 +288,7 @@ void loadSavedCameraPosition() {
             }
             lineIndex++;
         }
+        file.close();
     }
 }
 
@@ -318,6 +335,7 @@ GLubyte* rockTexture;
 GLubyte* ladderTexture;
 GLubyte* rubyTexture;
 GLubyte* rubyGemTexture;
+GLubyte* shopFloorTexture;
 
 std::map<int, BlockType> blockTypes;
 std::vector<std::pair<int, BlockType>> blockTypesOrdered;
@@ -437,6 +455,20 @@ void loadTexture() {
     {
         std::cout << "Failed to load texture rubyGemTexture" << std::endl;
     }
+
+    SHOPMAP = stbi_load("assets/shopmap.bmp", &width, &height, &nrChannels, 1);
+    if (!SHOPMAP)
+    {
+        std::cout << "Failed to load texture SHOPMAP" << std::endl;
+    }
+
+    shopFloorTexture = stbi_load("assets/shopfloor.png", &width, &height, &nrChannels, 0);
+    if (!shopFloorTexture)
+    {
+        std::cout << "Failed to load texture shopFloorTexture" << std::endl;
+    }
+
+
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
@@ -598,11 +630,20 @@ int mapIndexFromCoord(int x, int z) {
 int sampleMap(int x, int z) {
     int test = mapIndexFromCoord(x,z);
     if(test != -1) {
-        if(blockTypes.find(MAPS[LAYER][test]) == blockTypes.end()) {
-                    //std::cout << "cleaning this \n";
-                    MAPS[LAYER][test] = 0;
+        if(!INSHOP) {
+            if(blockTypes.find(MAPS[LAYER][test]) == blockTypes.end()) {
+                        //std::cout << "cleaning this \n";
+                        MAPS[LAYER][test] = 0;
+            }
+            return MAPS[LAYER][test];
+        } else {
+            if(blockTypes.find(SHOPMAP[test]) == blockTypes.end()) {
+                        //std::cout << "cleaning this \n";
+                        SHOPMAP[test] = 0;
+            }
+            return SHOPMAP[test];
         }
-        return MAPS[LAYER][test];
+            
     } else {
         return -1;
     }
@@ -788,6 +829,8 @@ void castRaysFromCamera() {
                             }
                         }
                         
+                    } else if(INSHOP) {
+                        color = colorFromUV(uvX, uvY, shopFloorTexture, 3);
                     } else {
                         color = colorFromUV(uvX, uvY, floorTexture, 3);
                     }
@@ -1372,9 +1415,11 @@ void goToMainMenu() {
     firstMouse = true;
     mouseCaptured = false;
     loopFunc = &menuLoop;
+    currentSong = MAINMENU;
     static std::vector<GUIButton> buttons = {
         GUIButton(0.0f, 0.0f, "Singleplayer", 0.0f, 1.0f, [](){
             loopFunc = &gameLoop;
+            currentSong = SHUFFLIN;
             currentGuiButtons = nullptr;
         }),
         GUIButton(0.0f, -0.1f, "Quit Game", 0.0f, 2.0f, [](){
@@ -1395,7 +1440,9 @@ void goToEscapeMenu() {
                 mapPath += std::to_string(i) + ".bmp";
                 int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
             }
-            saveCameraPosition();
+            if(!INSHOP) {
+                saveCameraPosition();
+            }
             goToMainMenu();
         }),
         GUIButton(0.0f, 0.1f, "Back to game", 0.0f, 2.0f, [](){
@@ -1408,6 +1455,25 @@ void goToEscapeMenu() {
     currentGuiButtons = &buttons;
 }
 
+void toggleShop() {
+    INSHOP = !INSHOP;
+    static glm::ivec3 outsideSkyColor;
+    static CurrentSong previousSong;
+    if(INSHOP) {
+        previousSong = currentSong;
+        currentSong = SHOP;
+        outsideSkyColor = BACKGROUNDCOLOR;
+        BACKGROUNDCOLOR = glm::ivec3(90,90,90);
+        saveCameraPosition();
+        cameraPosition = glm::vec2(0,0);
+        BUILDMODE = false;
+    } else {
+        BACKGROUNDCOLOR = outsideSkyColor;
+        currentSong = previousSong;
+        loadSavedCameraPosition();
+    }
+
+}
 
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -1428,7 +1494,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (key == GLFW_KEY_S) {
         backward = action;
     }
-    if (key == GLFW_KEY_B && action == 1) {
+    if (key == GLFW_KEY_B && action == 1 && !INSHOP) {
         BUILDMODE = !BUILDMODE;
         std::string build("Build Mode ");
         build += BUILDMODE ? "ON" : "OFF";
@@ -1483,6 +1549,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         FUCKEDUP = !FUCKEDUP;
     }
 
+
+    if(key == GLFW_KEY_K && action == 1) {
+        toggleShop();
+    }
+
     // if(key == GLFW_KEY_P) {
     //     // FOVMULTIPLIER += 0.01f;
     //     // WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
@@ -1497,6 +1568,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     // }
         
 }
+
 
 void drawSelectedBlock() {
     int squareWidth = 10;
@@ -1671,6 +1743,7 @@ int main() {
 
     audioData1 = loadAudioFile("assets/song1.mp3");
     audioData2 = loadAudioFile("assets/song2.mp3");
+    audioData3 = loadAudioFile("assets/song3.mp3");
 
     PaStream* stream;
     PaStreamParameters outputParameters;
@@ -1699,7 +1772,8 @@ int main() {
 
 
     menuLoop = [](){
-        condition = true;
+        
+            
         glClearColor(0.0f,0.0f,0.0f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -1831,7 +1905,7 @@ int main() {
 
 
     gameLoop = [](){
-        condition = false;
+        
             glBindVertexArray(VAO);
             glUseProgram(SHADER_PROG1);
             glBindTexture(GL_TEXTURE_2D, TEXTURE_ID);
@@ -1861,7 +1935,6 @@ int main() {
     };
 
     splashLoop = [](){
-        condition = true;
         static float timer = 0.0f;
         drawSplashScreen();
         updateTime();
@@ -2105,6 +2178,7 @@ int main() {
 
     glBindVertexArray(VAO2);
     
+    currentSong = MAINMENU;
     loopFunc = &splashLoop;
    
 
@@ -2121,7 +2195,10 @@ int main() {
         mapPath += std::to_string(i) + ".bmp";
         int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
     }
-    saveCameraPosition();
+    if(!INSHOP) {
+        saveCameraPosition();
+    }
+    
 
     glfwDestroyWindow(WINDOW);
     glfwTerminate();
