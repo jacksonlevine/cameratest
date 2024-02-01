@@ -336,6 +336,7 @@ GLubyte* ladderTexture;
 GLubyte* rubyTexture;
 GLubyte* rubyGemTexture;
 GLubyte* shopFloorTexture;
+GLubyte* shopWallTexture;
 
 std::map<int, BlockType> blockTypes;
 std::vector<std::pair<int, BlockType>> blockTypesOrdered;
@@ -469,6 +470,13 @@ void loadTexture() {
     }
 
 
+    shopWallTexture = stbi_load("assets/shopwall.png", &width, &height, &nrChannels, 0);
+    if (!shopWallTexture)
+    {
+        std::cout << "Failed to load texture shopWallTexture" << std::endl;
+    }
+
+
     blockTypes = {
     {255, BlockType{
         stoneWallTexture,
@@ -530,6 +538,11 @@ void loadTexture() {
         rubyGemTexture,
         true,
         true
+    }},
+    {56, BlockType{
+        shopWallTexture,
+        false,
+        false
     }}
 };
 }
