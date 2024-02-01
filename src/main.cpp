@@ -768,7 +768,7 @@ void castRaysFromCamera() {
             }
 
             if(testSpot.y <= 0.0f) {
-                if(LAYER == 0) {
+                if(LAYER == 0 && !INSHOP) {
                     sky = true;
                 }
                 top = true;
@@ -1251,6 +1251,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                             loadMap(LAYER + 1);
                             if(MAPS[LAYER+1][mapInd] == 0 || MAPS[LAYER+1][mapInd] == 52) {
                                 MAPS[LAYER][mapInd] = 52;
+                            } else {
+                                textView.addMessageToHeap("You cannot place a mineshaft here, there is no empty space below!");
                             }
                         } else {
                             MAPS[LAYER][mapInd] = blockTypesOrdered[blockTypeSelected].first;
@@ -1480,6 +1482,7 @@ void toggleShop() {
         saveCameraPosition();
         cameraPosition = glm::vec2(0,0);
         BUILDMODE = false;
+        textView.addMessageToHeap("Press K to leave the shop at any time.");
     } else {
         BACKGROUNDCOLOR = outsideSkyColor;
         currentSong = previousSong;
@@ -1564,7 +1567,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 
     if(key == GLFW_KEY_K && action == 1) {
-        toggleShop();
+        if(sampleMap(viewedBlock.x, viewedBlock.y) == 55 || INSHOP)
+            toggleShop();
     }
 
     // if(key == GLFW_KEY_P) {
@@ -1933,6 +1937,12 @@ int main() {
             stepGoingDown();
             stepJumping();
             castRaysFromCamera();
+
+            if(sampleMap(viewedBlock.x, viewedBlock.y) == 55) {
+                textView.setTextNode("ShopInfo", "Press K to enter the shop!", glm::vec2(-0.5f, 0.5f));
+            } else {
+                textView.removeTextNode("ShopInfo");
+            }
 
             drawSelectedBlock();
 

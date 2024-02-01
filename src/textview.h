@@ -16,12 +16,22 @@ struct TextNode {
     glm::vec2 position;
 };
 
+struct TimedNode {
+    std::string text;
+    double timeStamp;
+};
+
 class TextView {
 public:
     int windowHeight;
     int windowWidth;
     TextView();
     void create();
+
+    void addMessageToHeap(
+        std::string text
+    );
+
     void setTextNode(
         std::string name,
         std::string text,
@@ -31,6 +41,10 @@ public:
     void display();
 
 private:
+
+    std::vector<TimedNode> heap;
+
+
     GLuint textTexture;
     GLuint vbo;
     std::vector<float> displayData;

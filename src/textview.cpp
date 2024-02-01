@@ -53,6 +53,19 @@ void TextView::create() {
     glDeleteShader(fragmentShader);
 }
 
+void TextView::addMessageToHeap(std::string message) {
+    TimedNode tmessage {
+        message,
+        glfwGetTime()
+    };
+    std::cout << "added message: " << message << "\n";
+    heap.insert(heap.begin(), tmessage);
+    if(heap.size() > 10) {
+        heap.pop_back();
+    }
+    updateDisplayData();
+}
+
 void TextView::setTextNode(std::string name, std::string text, glm::vec2 pos) {
     auto nodeIt = nodes.find(name);
     if(nodeIt == nodes.end()) {
@@ -97,10 +110,45 @@ void TextView::updateDisplayData() {
             });
         }
     }
+
+    int index = 0;
+    for(TimedNode& node : heap) {
+        const char* text = node.text.c_str();
+        float lettersCount = std::strlen(text);
+
+        glm::vec2 letterStart(-0.9f, -0.9f + (index * 0.05));
+
+        GlyphFace glyph;
+
+        for(int i = 0; i < lettersCount; i++) {
+            glyph.setCharCode(static_cast<int>(text[i]));
+            glm::vec2 thisLetterStart(letterStart.x + i*letWidth, letterStart.y);
+            displayData.insert(displayData.end(), {
+                thisLetterStart.x, thisLetterStart.y,                     glyph.bl.x, glyph.bl.y, -1.0f,
+                thisLetterStart.x, thisLetterStart.y+letHeight,           glyph.tl.x, glyph.tl.y, -1.0f,
+                thisLetterStart.x+letWidth, thisLetterStart.y+letHeight, glyph.tr.x, glyph.tr.y, -1.0f,
+
+                thisLetterStart.x+letWidth, thisLetterStart.y+letHeight, glyph.tr.x, glyph.tr.y, -1.0f,
+                thisLetterStart.x+letWidth, thisLetterStart.y,           glyph.br.x, glyph.br.y, -1.0f,
+                thisLetterStart.x, thisLetterStart.y,                     glyph.bl.x, glyph.bl.y, -1.0f
+            });
+        }
+        index++;
+    }
     uploaded = false;
 }
 
 void TextView::display() {
+    double time = glfwGetTime();
+
+    if(heap.size() > 0) {
+        if(time - heap.back().timeStamp > 10) {
+            heap.pop_back();
+            updateDisplayData();
+        }
+    }
+
+
     glBindTexture(GL_TEXTURE_2D, textTexture);
     glUseProgram(shader);
     if(!uploaded) {
