@@ -2,6 +2,7 @@
 #define INVENTORY_H
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 
 struct ItemNode {
     GLubyte id;
@@ -15,7 +16,8 @@ class Inventory {
 public:
     inline static const int numberOfSlots = 24;
     ItemNode nodes[numberOfSlots];
-    void fakeLoadInventory();
+    void fakeLoadInventory(); 
+    bool addItem(ItemNode item);
 };
 
 #endif 

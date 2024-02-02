@@ -1240,7 +1240,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             if(BUILDMODE) {
                 int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                 if(mapInd != -1) {
-                    MAPS[LAYER][mapInd] = 0;
+                    if(MAPS[LAYER][mapInd] != 0) {
+                        if(inventory.addItem(ItemNode{MAPS[LAYER][mapInd], 1})) {
+                            MAPS[LAYER][mapInd] = 0;
+                        }
+                    }
+                    
                 }
             }
             
