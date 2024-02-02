@@ -37,6 +37,12 @@
 
 #include "portaudio.h"
 #include <sndfile.h>
+#include "inventory.h"
+
+
+Inventory inventory;
+
+
 
 int sampleRate = 0;
 int channels = 0;
@@ -81,15 +87,17 @@ enum CurrentSong {
 
 CurrentSong currentSong;
 
+size_t dataIndex1 = 0;
+size_t dataIndex2 = 0;
+size_t dataIndex3 = 0;
+
 static int audioCallback(const void* inputBuffer, void* outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo* timeInfo,
                          PaStreamCallbackFlags statusFlags,
                          void* userData) {
     float* out = (float*)outputBuffer;
-    static size_t dataIndex1 = 0;
-    static size_t dataIndex2 = 0;
-    static size_t dataIndex3 = 0;
+
 
     for (size_t i = 0; i < framesPerBuffer; ++i) {
         if (currentSong == MAINMENU) {
@@ -150,7 +158,7 @@ glm::vec2 viewedBlock;
 int SWIDTH = 1280;
 int SHEIGHT = 720;
 
-int blockTypeSelected = 0;
+int slotSelected = 0;
 
 
 int forward = 0;
@@ -349,7 +357,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     if(yoffset < 0) {
         yoffset = -1;
     }
-    blockTypeSelected = std::max(0, std::min((int)blockTypesOrdered.size()-1, (int)(blockTypeSelected + yoffset)));
+    slotSelected = (slotSelected + (int)yoffset) % 6;
+    if(slotSelected < 0) {
+        slotSelected = 5;
+    }
+    //std::cout << std::to_string(slotSelected) << "\n";
 }
 
 
@@ -1244,32 +1256,41 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     {
         if(mouseCaptured) {
             if(BUILDMODE) {
-                int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
-                if(mapInd != -1) {
-                    if(MAPS[LAYER][mapInd] == 0) {
-                        if(blockTypesOrdered[blockTypeSelected].first == 52) {
-                            loadMap(LAYER + 1);
-                            if(MAPS[LAYER+1][mapInd] == 0 || MAPS[LAYER+1][mapInd] == 52) {
-                                MAPS[LAYER][mapInd] = 52;
+                if(inventory.nodes[slotSelected].id != 0) {
+                    int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
+                    if(mapInd != -1) {
+                        if(MAPS[LAYER][mapInd] == 0) {
+                            if(inventory.nodes[slotSelected].id == 52) {
+                                loadMap(LAYER + 1);
+                                if(MAPS[LAYER+1][mapInd] == 0 || MAPS[LAYER+1][mapInd] == 52) {
+                                    MAPS[LAYER][mapInd] = 52;
+                                } else {
+                                    textView.addMessageToHeap("You cannot place a mineshaft here, there is no empty space below!");
+                                }
                             } else {
-                                textView.addMessageToHeap("You cannot place a mineshaft here, there is no empty space below!");
+                                MAPS[LAYER][mapInd] = inventory.nodes[slotSelected].id;
                             }
-                        } else {
-                            MAPS[LAYER][mapInd] = blockTypesOrdered[blockTypeSelected].first;
+                            if(inventory.nodes[slotSelected].count == 1) {
+                                inventory.nodes[slotSelected] = ItemNode{0,0};
+                            }
+                            inventory.nodes[slotSelected].count -= 1;
                         }
-                        
                     }
                 }
             } else {
                 int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                
                 if(mapInd != -1) {
+
+
+                    //door logic
                     if(MAPS[LAYER][mapInd] == 5) {
                         MAPS[LAYER][mapInd] = 6;
                     } else 
                     if(MAPS[LAYER][mapInd] == 6) {
                         MAPS[LAYER][mapInd] = 5;
                     }
+
                 }
             }
             
@@ -1425,12 +1446,19 @@ void stepJumping() {
     }
 }
 
+void startMainTheme() {
+    if(currentSong != MAINMENU) {
+        dataIndex1 = 0;
+        currentSong = MAINMENU;
+    }
+}
+
 void goToMainMenu() {
     glfwSetInputMode(WINDOW, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     firstMouse = true;
     mouseCaptured = false;
     loopFunc = &menuLoop;
-    currentSong = MAINMENU;
+    startMainTheme();
     static std::vector<GUIButton> buttons = {
         GUIButton(0.0f, 0.0f, "Singleplayer", 0.0f, 1.0f, [](){
             loopFunc = &gameLoop;
@@ -1588,31 +1616,33 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 
 void drawSelectedBlock() {
-    int squareWidth = 10;
+    int squareWidth = 25;
     int startX = (int)((float)WIDTH * 0.75f);
     int startY = (int)(((float)HEIGHT + yOffset * 100) * 0.75f);
+    if(inventory.nodes[slotSelected].id != 0) {
+        for(int y = 0; y < squareWidth; y++) {
+            for(int x = 0; x < squareWidth; x++) {
+                int index = (startY + y) * WIDTH + (startX + x);
+                float uvX = x / (float)squareWidth;
+                float uvY = 1.0f - y / (float)squareWidth;
 
-    for(int y = 0; y < squareWidth; y++) {
-        for(int x = 0; x < squareWidth; x++) {
-            int index = (startY + y) * WIDTH + (startX + x);
-            float uvX = x / (float)squareWidth;
-            float uvY = 1.0f - y / (float)squareWidth;
+                if(blockTypes.at(inventory.nodes[slotSelected].id).transparent) {
+                    glm::vec4 color = colorWithAlphaFromUV(uvX, uvY, blockTypes.at(inventory.nodes[slotSelected].id).texture);
+                    glm::vec3 existingColor = getPixelVal(index);
 
-            if(blockTypesOrdered[blockTypeSelected].second.transparent) {
-                glm::vec4 color = colorWithAlphaFromUV(uvX, uvY, blockTypesOrdered[blockTypeSelected].second.texture);
-                glm::vec3 existingColor = getPixelVal(index);
+                    existingColor.r = std::min(255, (int)(existingColor.r + color.r * (color.a / 255.0f)));
+                    existingColor.g = std::min(255, (int)(existingColor.g + color.g * (color.a / 255.0f)));
+                    existingColor.b = std::min(255, (int)(existingColor.b + color.b * (color.a / 255.0f)));
 
-                existingColor.r = std::min(255, (int)(existingColor.r + color.r * (color.a / 255.0f)));
-                existingColor.g = std::min(255, (int)(existingColor.g + color.g * (color.a / 255.0f)));
-                existingColor.b = std::min(255, (int)(existingColor.b + color.b * (color.a / 255.0f)));
-
-                setPixel(index, existingColor.r, existingColor.g, existingColor.b);
-            } else {
-                glm::vec3 color = colorFromUV(uvX, uvY, blockTypesOrdered[blockTypeSelected].second.texture, 3);
-                setPixel(index, color.r, color.g, color.b);
+                    setPixel(index, existingColor.r, existingColor.g, existingColor.b);
+                } else {
+                    glm::vec3 color = colorFromUV(uvX, uvY, blockTypes.at(inventory.nodes[slotSelected].id).texture, 3);
+                    setPixel(index, color.r, color.g, color.b);
+                }
             }
         }
     }
+    
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -2201,9 +2231,11 @@ int main() {
 
     glBindVertexArray(VAO2);
     
-    currentSong = MAINMENU;
+    startMainTheme();
     loopFunc = &splashLoop;
    
+
+    inventory.fakeLoadInventory();
 
     while(!glfwWindowShouldClose(WINDOW)) {
         (*loopFunc)();
