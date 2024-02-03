@@ -1255,7 +1255,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                 mouseCaptured = true;
             }
             
-        }
+        } 
     }
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
