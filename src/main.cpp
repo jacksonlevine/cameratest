@@ -38,11 +38,26 @@
 #include "portaudio.h"
 #include <sndfile.h>
 #include "inventory.h"
+#include "soundfxsystem.h"
 
 
 Inventory inventory;
+SoundFXSystem sfs;
 
+SoundEffect doorSound = sfs.add("assets/sfx/door.mp3");
 
+SoundEffect stoneStep1 = sfs.add("assets/sfx/stonestep1.mp3");
+SoundEffect stoneStep2 = sfs.add("assets/sfx/stonestep2.mp3");
+SoundEffect stoneStep3 = sfs.add("assets/sfx/stonestep3.mp3");
+SoundEffect stoneStep4 = sfs.add("assets/sfx/stonestep4.mp3");
+
+SoundEffect ladderSound = sfs.add("assets/sfx/ladder.mp3");
+
+SoundEffectSeries stoneStepSeries{
+    {stoneStep1, stoneStep2, stoneStep3, stoneStep4}
+};
+float stepTimer = 0.0f;
+float stepInterval = 0.3f;
 
 int sampleRate = 0;
 int channels = 0;
@@ -73,7 +88,8 @@ std::vector<float> loadAudioFile(const std::string& filename) {
 }
 
 
-PaStream* stream;
+PaStream* musicStream;
+PaStream* sfxStream;
 
 std::vector<float> audioData1; // First audio file data
 std::vector<float> audioData2; // Second audio file data
@@ -91,7 +107,7 @@ size_t dataIndex1 = 0;
 size_t dataIndex2 = 0;
 size_t dataIndex3 = 0;
 
-static int audioCallback(const void* inputBuffer, void* outputBuffer,
+static int musicCallback(const void* inputBuffer, void* outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo* timeInfo,
                          PaStreamCallbackFlags statusFlags,
@@ -114,6 +130,29 @@ static int audioCallback(const void* inputBuffer, void* outputBuffer,
             dataIndex3 = (dataIndex3 + 1) % (audioData3.size() / 2);
         }
     }
+    return paContinue;
+}
+
+static int sfxCallback(const void* inputBuffer, void* outputBuffer,
+                         unsigned long framesPerBuffer,
+                         const PaStreamCallbackTimeInfo* timeInfo,
+                         PaStreamCallbackFlags statusFlags,
+                         void* userData) {
+    float* out = (float*)outputBuffer;
+    std::fill(out, out + framesPerBuffer*2, 0.0f);
+    for(RingBuffer * rbuf : sfs.outputBuffers) {
+        if(rbuf->count > 0) {
+            float input[512];
+            rbuf->readOneBuffer(input);
+            for (size_t i = 0; i < framesPerBuffer*2; i += 2) {
+                out[i] = std::max(-1.0f, std::min(1.0f, input[i] + out[i]));
+                out[i+1] = std::max(-1.0f, std::min(1.0f, input[i+1] + out[i+1]));
+            }
+        }
+
+        
+    }
+
     return paContinue;
 }
 
@@ -717,18 +756,33 @@ void castRaysFromCamera() {
 
     glm::vec2 proposedPosition = cameraPosition;
 
+    bool isWalking = false;
+
     if(!GOINGDOWN && !GOINGUP) {
         if(right) {
             proposedPosition += directionFromAngle(cameraAngle+((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
+            isWalking = true;
         }
         if(left) {
             proposedPosition += directionFromAngle(cameraAngle-((std::acos(-1.0f)/2.0f)))*speedMult*deltaTime;
+            isWalking = true;
         }
         if(forward) {
             proposedPosition += directionFromAngle(cameraAngle)*speedMult*deltaTime;
+            isWalking = true;
         }
         if(backward) {
             proposedPosition -= directionFromAngle(cameraAngle)*speedMult*deltaTime;
+            isWalking = true;
+        }
+    }
+
+    if(isWalking) {
+        if(stepTimer > stepInterval) {
+            stepTimer = 0.0f;
+            sfs.playNextInSeries(stoneStepSeries);
+        } else {
+            stepTimer += deltaTime;
         }
     }
     std::vector<glm::vec2> correctionsMade;
@@ -1291,9 +1345,11 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                     //door logic
                     if(MAPS[LAYER][mapInd] == 5) {
                         MAPS[LAYER][mapInd] = 6;
+                        sfs.play(doorSound);
                     } else 
                     if(MAPS[LAYER][mapInd] == 6) {
                         MAPS[LAYER][mapInd] = 5;
+                        sfs.play(doorSound);
                     }
 
                 }
@@ -1572,9 +1628,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         glm::ivec2 cameraTile(std::round(cameraPosition.x), std::round(cameraPosition.y));
         int tile = sampleMap(cameraTile.x, cameraTile.y);
         if(tile == 52) {
+            
             loadMap(LAYER+1);
             if(MAPS[LAYER+1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 0 || MAPS[LAYER+1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 52)
-            GOINGDOWN = true;
+            {
+                sfs.play(ladderSound);
+                GOINGDOWN = true;
+            }
+                
         }
     }
     if(key == GLFW_KEY_SPACE) {
@@ -1583,10 +1644,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         if(tile == 52 && LAYER > 0) {
             if(action == 1 && !GOINGDOWN) {
             
-            
+                
                 loadMap(LAYER-1);
-                if(MAPS[LAYER-1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 0 || MAPS[LAYER-1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 52)
-                GOINGUP = true;
+                if(MAPS[LAYER-1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 0 || MAPS[LAYER-1][mapIndexFromCoord(cameraTile.x, cameraTile.y)] == 52) {
+                    sfs.play(ladderSound);
+                    GOINGUP = true;
+                }
+                
             }
         } else {
             JUMPKEYHELD = action ? true : false;
@@ -1797,7 +1861,7 @@ int main() {
     audioData2 = loadAudioFile("assets/song2.mp3");
     audioData3 = loadAudioFile("assets/song3.mp3");
 
-    PaStream* stream;
+
     PaStreamParameters outputParameters;
     outputParameters.device = Pa_GetDefaultOutputDevice(); // Default output device
     outputParameters.channelCount = channels; // Stereo output
@@ -1805,19 +1869,36 @@ int main() {
     outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
     outputParameters.hostApiSpecificStreamInfo = NULL;
 
-    err = Pa_OpenStream(&stream,
+    err = Pa_OpenStream(&musicStream,
                         NULL, // No input parameters, as we're only playing audio
                         &outputParameters, // Output parameters
                         sampleRate, // Sample rate
                         256, // Frames per buffer
                         paClipOff, // Stream flags
-                        audioCallback, // Callback function
+                        musicCallback, // Callback function
                         NULL); // User data
     if (err != paNoError) {
-        std::cout << "Error opening stream" << Pa_GetErrorText(err) << "\n";
+        std::cout << "Error opening musicStream" << Pa_GetErrorText(err) << "\n";
     }
 
-    err = Pa_StartStream(stream);
+    err = Pa_OpenStream(&sfxStream,
+                        NULL, // No input parameters, as we're only playing audio
+                        &outputParameters, // Output parameters
+                        sampleRate, // Sample rate
+                        256, // Frames per buffer
+                        paClipOff, // Stream flags
+                        sfxCallback, // Callback function
+                        NULL); // User data
+    if (err != paNoError) {
+        std::cout << "Error opening sfxStream" << Pa_GetErrorText(err) << "\n";
+    }
+
+    err = Pa_StartStream(musicStream);
+    if (err != paNoError) {
+        // Handle error
+    }
+
+    err = Pa_StartStream(sfxStream);
     if (err != paNoError) {
         // Handle error
     }
@@ -2263,8 +2344,8 @@ int main() {
     glfwDestroyWindow(WINDOW);
     glfwTerminate();
 
-    Pa_StopStream(stream);
-    Pa_CloseStream(stream);
+    Pa_StopStream(musicStream);
+    Pa_CloseStream(musicStream);
     Pa_Terminate();
 
     return EXIT_SUCCESS;
