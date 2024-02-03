@@ -57,6 +57,8 @@ SoundEffect stoneStep4 = sfs.add("assets/sfx/stonestep4.mp3");
 
 SoundEffect ladderSound = sfs.add("assets/sfx/ladder.mp3");
 
+SoundEffect inventorySound = sfs.add("assets/sfx/inventory.mp3");
+
 SoundEffectSeries stoneStepSeries{
     {stoneStep1, stoneStep2, stoneStep3, stoneStep4}
 };
@@ -1697,6 +1699,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if(key == GLFW_KEY_E && action == 1 && loopFunc == &gameLoop) {
         drawingInv = !drawingInv;
         if(drawingInv) {
+            sfs.play(inventorySound);
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             firstMouse = true;
             mouseCaptured = false;
