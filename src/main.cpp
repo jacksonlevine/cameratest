@@ -42,6 +42,10 @@
 
 
 Inventory inventory;
+
+bool drawingInv = false;
+bool invDisplayDirty = true;
+
 SoundFXSystem sfs;
 
 SoundEffect doorSound = sfs.add("assets/sfx/door.mp3");
@@ -384,6 +388,9 @@ GLubyte* rubyTexture;
 GLubyte* rubyGemTexture;
 GLubyte* shopFloorTexture;
 GLubyte* shopWallTexture;
+GLubyte* inventoryTexture;
+
+int invTexWidth, invTexHeight, invNumChans;
 
 std::map<int, BlockType> blockTypes;
 std::vector<std::pair<int, BlockType>> blockTypesOrdered;
@@ -527,6 +534,12 @@ void loadTexture() {
         std::cout << "Failed to load texture shopWallTexture" << std::endl;
     }
 
+    inventoryTexture = stbi_load("assets/inventory.png", &invTexWidth, &invTexHeight, &invNumChans, 0);
+    if (!inventoryTexture)
+    {
+        std::cout << "Failed to load texture ivenxtoryTuedxture" << std::endl;
+    }
+
 
     blockTypes = {
     {255, BlockType{
@@ -649,6 +662,19 @@ glm::ivec4 colorWithAlphaFromUV(float uvX, float uvY, GLubyte* texture) {
     int y = std::round((1.0f - uvY )* 31.0f);
 
     int index = y * 32 + x;
+
+    int realIndex = index * 4;
+    
+    return glm::ivec4(texture[realIndex], texture[realIndex+1], texture[realIndex+2], texture[realIndex+3]);
+}
+
+glm::ivec4 colorWithAlphaFromUVImage(float uvX, float uvY, GLubyte* texture, int width, int height) {
+    //assuming texture is always 32x32
+
+    int x = std::round(uvX * (width -1));
+    int y = std::round((1.0f - uvY )* (height -1));
+
+    int index = y * width + x;
 
     int realIndex = index * 4;
     
@@ -1304,7 +1330,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             }
             
         } else {
-            if(loopFunc == &gameLoop) {
+            if(loopFunc == &gameLoop && !drawingInv) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 mouseCaptured = true;
             }
@@ -1668,6 +1694,18 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             toggleShop();
     }
 
+    if(key == GLFW_KEY_E && action == 1 && loopFunc == &gameLoop) {
+        drawingInv = !drawingInv;
+        if(drawingInv) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            firstMouse = true;
+            mouseCaptured = false;
+        } else {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            mouseCaptured = true;
+        }
+    }
+
     // if(key == GLFW_KEY_P) {
     //     // FOVMULTIPLIER += 0.01f;
     //     // WALLHEIGHT = (float)HEIGHT/FOVMULTIPLIER;
@@ -1714,14 +1752,30 @@ void drawSelectedBlock() {
     
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-    SWIDTH = width;
-    SHEIGHT = height;
-    GUIButton::windowWidth = SWIDTH;
-    GUIButton::windowHeight = SHEIGHT;
+
+void drawInventoryBackgroundToBuffer() {
+    int squareWidth = invTexWidth;
+    int startX = (int)((float)WIDTH * 0.3f);
+    int startY = (int)(15 + yOffset * 70);
+    if(drawingInv && loopFunc == &gameLoop) {
+        for(int y = 0; y < squareWidth; y++) {
+            for(int x = 0; x < squareWidth; x++) {
+                int index = (startY + y) * WIDTH + (startX + x);
+                float uvX = x / (float)squareWidth;
+                float uvY = 1.0f - y / (float)squareWidth;
+
+                
+                    glm::vec4 color = colorWithAlphaFromUVImage(uvX, uvY, inventoryTexture, invTexWidth, invTexHeight);
+                    if(color.a > 0) {
+                        setPixel(index, color.r, color.g, color.b);
+                    }
+                        
+
+            }
+        }
+    }
 }
+
 
 void bindMenuGeometry(GLuint vbo, const float *data, size_t dataSize) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -1755,6 +1809,91 @@ void bindMenuGeometryNoUpload(GLuint vbo) {
     glEnableVertexAttribArray(elementIdAttrib);
     glVertexAttribPointer(elementIdAttrib, 1, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(4 * sizeof(float)));
 }
+
+void drawInventoryForegroundElements() {
+    if(drawingInv && loopFunc == &gameLoop) {
+        glBindVertexArray(VAO2);
+        glUseProgram(MENUSHADER);
+        glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+
+        float invTileWidth = ((float)invTexWidth/WIDTH) / 3.5f;
+        float invTileHeight = ((float)invTexWidth/HEIGHT) / 3.5f;
+        float spacePixels = 4.0f/WIDTH;
+
+        static GLuint vbo;
+
+        static std::vector<float> displayData;
+
+        float invStartX = -0.349f;
+        float invStartY = -0.48f;
+        TextureFace invFace(3,0);
+
+        if(invDisplayDirty) {
+            glDeleteBuffers(1, &vbo);
+            glGenBuffers(1, &vbo);
+
+            invDisplayDirty = false;
+
+            for(int k = 0; k < 3; k++) {
+                for(int i = 0; i < 6; i++) {
+                    int invTileIndex = k * 6 + i;
+                    displayData.insert(displayData.end(), {
+                        invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
+                        invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k)+invTileHeight,  invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
+                        invStartX + ((invTileWidth + spacePixels) * i)+invTileWidth, invStartY+((invTileHeight + spacePixels) * k)+invTileHeight,  invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
+
+                        invStartX + ((invTileWidth + spacePixels) * i)+invTileWidth, invStartY+((invTileHeight + spacePixels) * k)+invTileHeight,  invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
+                        invStartX + ((invTileWidth + spacePixels) * i)+invTileWidth, invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
+                        invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
+                    });
+                }
+            }
+
+            bindMenuGeometry(vbo, displayData.data(), displayData.size());
+        } else {
+            bindMenuGeometryNoUpload(vbo);
+        }
+
+
+        mousedOverElement = 0.0f;
+
+        for(int i = 0; i < displayData.size(); i+= 30) {
+
+            float screenPosx = (displayData[i+5] + 1.0f) * 0.5f;
+            float screenPosy = (1.0f - displayData[i+6]) * 0.5f;
+            float screenWidth = invTileWidth / 2;
+            float screenHeight = invTileHeight / 2;
+            float elementID = displayData[i+4];
+
+            double xpos, ypos;
+            glfwGetCursorPos(WINDOW, &xpos, &ypos);
+            if(xpos > screenPosx * SWIDTH &&
+            xpos < (screenPosx + screenWidth) * SWIDTH &&
+            ypos > screenPosy * SHEIGHT &&
+            ypos < (screenPosy + screenHeight) * SHEIGHT)
+            {
+                mousedOverElement = elementID;
+            }
+        }
+
+        GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
+        glUniform1f(moeLocation, mousedOverElement);
+        GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
+        glUniform1f(coeLocation, clickedOnElement);
+
+        glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
+    }
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+    SWIDTH = width;
+    SHEIGHT = height;
+    GUIButton::windowWidth = SWIDTH;
+    GUIButton::windowHeight = SHEIGHT;
+}
+
 
 
 
@@ -2061,10 +2200,13 @@ int main() {
             }
 
             drawSelectedBlock();
+            drawInventoryBackgroundToBuffer();
 
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, PIXELS);
 
             glDrawArrays(GL_TRIANGLES, 0, 6);
+
+            drawInventoryForegroundElements();
 
             drawGuiIfOpen();
 
