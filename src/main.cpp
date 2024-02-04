@@ -59,6 +59,9 @@ SoundEffect ladderSound = sfs.add("assets/sfx/ladder.mp3");
 
 SoundEffect inventorySound = sfs.add("assets/sfx/inventory.mp3");
 
+SoundEffect buttonHover = sfs.add("assets/sfx/buttonover.mp3");
+SoundEffect buttonPress = sfs.add("assets/sfx/buttonpress.mp3");
+
 SoundEffectSeries stoneStepSeries{
     {stoneStep1, stoneStep2, stoneStep3, stoneStep4}
 };
@@ -172,6 +175,8 @@ std::function<void()>* loopFunc;
 std::vector<GUIButton> *currentGuiButtons = nullptr;
 float clickedOnElement = 0.0f;
 float mousedOverElement = 0.0f;
+
+float lastMousedOverElement = 0.0f;
 
 
 bool JUMPKEYHELD = false;
@@ -1314,6 +1319,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             for(auto &button : *currentGuiButtons) {
                 if(button.elementID == clickedOnElement) {
                     button.myFunction();
+                    sfs.play(buttonPress);
                 }
             }
         }
@@ -1921,6 +1927,12 @@ void drawGuiIfOpen() {
                 mousedOverElement = button.elementID;
             }
 
+            if(mousedOverElement != lastMousedOverElement && mousedOverElement != 0.0f) {
+                lastMousedOverElement = mousedOverElement;
+                sfs.play(buttonHover);
+            }
+            
+
             if(!button.uploaded) {
                 bindMenuGeometry(button.vbo, button.displayData.data(), button.displayData.size());
                 button.uploaded = true;
@@ -1929,6 +1941,10 @@ void drawGuiIfOpen() {
             }
             glDrawArrays(GL_TRIANGLES, 0, button.displayData.size() / 5);
         }
+        if(mousedOverElement == 0.0f) {
+            lastMousedOverElement = 0.0f;
+        }
+        //std::cout << std::to_string(lastMousedOverElement) << " " << std::to_string(mousedOverElement) << "\n";
 
         GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
         glUniform1f(moeLocation, mousedOverElement);
