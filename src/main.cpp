@@ -58,6 +58,7 @@ SoundEffect stoneStep4 = sfs.add("assets/sfx/stonestep4.mp3");
 SoundEffect ladderSound = sfs.add("assets/sfx/ladder.mp3");
 
 SoundEffect inventorySound = sfs.add("assets/sfx/inventory.mp3");
+SoundEffect inventoryClose = sfs.add("assets/sfx/inventoryclose.mp3");
 
 SoundEffect buttonHover = sfs.add("assets/sfx/buttonover.mp3");
 SoundEffect buttonPress = sfs.add("assets/sfx/buttonpress.mp3");
@@ -400,6 +401,9 @@ GLubyte* shopFloorTexture;
 GLubyte* shopWallTexture;
 GLubyte* inventoryTexture;
 
+GLuint polyTexture;
+GLuint polyTextureTransparent;
+
 int invTexWidth, invTexHeight, invNumChans;
 
 std::map<int, BlockType> blockTypes;
@@ -423,6 +427,9 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
 void loadTexture() {
 
+
+
+
     int width, height;
     stoneWallTexture = stbi_load("assets/stonewall.png", &width, &height, &nrChannels, 0);
     if (stoneWallTexture)
@@ -433,6 +440,9 @@ void loadTexture() {
     {
         std::cout << "Failed to load texture stonewall" << std::endl;
     }
+
+
+
 
 
     floorTexture = stbi_load("assets/floor.png", &width, &height, &nrChannels, 0);
@@ -464,6 +474,26 @@ void loadTexture() {
     {
         std::cout << "Failed to load texture glassTexture" << std::endl;
     }
+
+
+    glGenTextures(1, &polyTexture);
+    glBindTexture(GL_TEXTURE_2D, polyTexture);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 32, 32, 0, GL_RGB, GL_UNSIGNED_BYTE, plyWoodTexture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glGenTextures(1, &polyTextureTransparent);
+    glBindTexture(GL_TEXTURE_2D, polyTextureTransparent);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 32, 32, 0, GL_RGBA, GL_UNSIGNED_BYTE, glassTexture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+
+
 
     selectTexture = stbi_load("assets/select.png", &width, &height, &nrChannels, 0);
     if (!selectTexture)
@@ -1344,6 +1374,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             if(loopFunc == &gameLoop && !drawingInv) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 mouseCaptured = true;
+                mousedOverElement = 0.0f;
             }
             
         } 
@@ -1658,6 +1689,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             mouseCaptured = true;
+            mousedOverElement = 0.0f;
         }
     }
     if((key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT) && action == 1 && !GOINGUP) {
@@ -1712,8 +1744,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             firstMouse = true;
             mouseCaptured = false;
         } else {
+            sfs.play(inventoryClose);
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             mouseCaptured = true;
+            mousedOverElement = 0.0f;
         }
     }
 
@@ -1824,7 +1858,7 @@ void bindMenuGeometryNoUpload(GLuint vbo) {
 void drawInventoryForegroundElements() {
     glBindVertexArray(VAO2);
     glUseProgram(MENUSHADER);
-    glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+    
 
     float invTileWidth = ((float)invTexWidth/WIDTH) / 3.5f;
     float invTileHeight = ((float)invTexWidth/HEIGHT) / 3.5f;
@@ -1846,15 +1880,20 @@ void drawInventoryForegroundElements() {
         float invStartY = -0.48f;
         
 
-        if(invDisplayDirty) {
-            glDeleteBuffers(1, &vbo);
-            glGenBuffers(1, &vbo);
+        mousedOverElement = 0.0f;
 
-            invDisplayDirty = false;
 
             for(int k = 0; k < 3; k++) {
                 for(int i = 0; i < 6; i++) {
+
+                    glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+
+                    glDeleteBuffers(1, &vbo);
+                    glGenBuffers(1, &vbo);
+
+
                     int invTileIndex = 6 + k * 6 + i;
+                    displayData.clear();
                     displayData.insert(displayData.end(), {
                         invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
                         invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k)+invTileHeight,  invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
@@ -1864,46 +1903,40 @@ void drawInventoryForegroundElements() {
                         invStartX + ((invTileWidth + spacePixels) * i)+invTileWidth, invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
                         invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
                     });
+                    bindMenuGeometry(vbo, displayData.data(), displayData.size());
+
+                    float screenPosx = (displayData[5] + 1.0f) * 0.5f;
+                    float screenPosy = (1.0f - displayData[6]) * 0.5f;
+                    float screenWidth = invTileWidth / 2;
+                    float screenHeight = invTileHeight / 2;
+                    float elementID = displayData[4];
+
+                    double xpos, ypos;
+                    glfwGetCursorPos(WINDOW, &xpos, &ypos);
+                    if(xpos > screenPosx * SWIDTH &&
+                    xpos < (screenPosx + screenWidth) * SWIDTH &&
+                    ypos > screenPosy * SHEIGHT &&
+                    ypos < (screenPosy + screenHeight) * SHEIGHT && !mouseCaptured)
+                    {
+                        mousedOverElement = elementID;
+                    }
+
+                    GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
+                    glUniform1f(moeLocation, mousedOverElement);
+                    GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
+                    glUniform1f(coeLocation, clickedOnElement);
+
+                    glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
+
                 }
             }
-
-            bindMenuGeometry(vbo, displayData.data(), displayData.size());
-        } else {
-            bindMenuGeometryNoUpload(vbo);
-        }
-
-
-        mousedOverElement = 0.0f;
-
-        for(int i = 0; i < displayData.size(); i+= 30) {
-
-            float screenPosx = (displayData[i+5] + 1.0f) * 0.5f;
-            float screenPosy = (1.0f - displayData[i+6]) * 0.5f;
-            float screenWidth = invTileWidth / 2;
-            float screenHeight = invTileHeight / 2;
-            float elementID = displayData[i+4];
-
-            double xpos, ypos;
-            glfwGetCursorPos(WINDOW, &xpos, &ypos);
-            if(xpos > screenPosx * SWIDTH &&
-            xpos < (screenPosx + screenWidth) * SWIDTH &&
-            ypos > screenPosy * SHEIGHT &&
-            ypos < (screenPosy + screenHeight) * SHEIGHT)
-            {
-                mousedOverElement = elementID;
-            }
-        }
-
-        
-        glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
     }
 
 
 
     GLuint vbo2;
 
-    glDeleteBuffers(1, &vbo2);
-    glGenBuffers(1, &vbo2);
+    
 
     std::vector<float> bottomInvDisplayData;
 
@@ -1911,7 +1944,11 @@ void drawInventoryForegroundElements() {
     float invStartY = -0.95f;
 
     for(int i = 0; i < 6; i++) {
+
+        glDeleteBuffers(1, &vbo2);
+        glGenBuffers(1, &vbo2);
         int invTileIndex = i;
+        bottomInvDisplayData.clear();
         bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
             invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY,                    invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
             invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY+(invTileHeight/2),  invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
@@ -1921,10 +1958,111 @@ void drawInventoryForegroundElements() {
             invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY,                    invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
             invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY,                    invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
         });
+
+        float screenPosx = (bottomInvDisplayData[5] + 1.0f) * 0.5f;
+            float screenPosy = (1.0f - bottomInvDisplayData[6]) * 0.5f;
+            float screenWidth = invTileWidth / 4;
+            float screenHeight = invTileHeight / 4;
+            float elementID = bottomInvDisplayData[4];
+
+            double xpos, ypos;
+            glfwGetCursorPos(WINDOW, &xpos, &ypos);
+            if(xpos > screenPosx * SWIDTH &&
+            xpos < (screenPosx + screenWidth) * SWIDTH &&
+            ypos > screenPosy * SHEIGHT &&
+            ypos < (screenPosy + screenHeight) * SHEIGHT &&
+            elementID != -1.0f && !mouseCaptured) 
+            {
+                mousedOverElement = elementID;
+            }
+
+            GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
+            glUniform1f(moeLocation, mousedOverElement);
+            GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
+            glUniform1f(coeLocation, clickedOnElement);
+
+            glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+
+            bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
+
+            glDrawArrays(GL_TRIANGLES, 0, bottomInvDisplayData.size()/5);
+
+            
+
+
+            if(inventory.nodes[invTileIndex].id != 0) {
+
+                glDeleteBuffers(1, &vbo2);
+                glGenBuffers(1, &vbo2);
+                BlockType& bt = blockTypes.at(inventory.nodes[invTileIndex].id);
+                if(bt.transparent) {
+                    glBindTexture(GL_TEXTURE_2D, polyTextureTransparent);
+                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 32, GL_RGBA, GL_UNSIGNED_BYTE, bt.texture);
+                } else {
+                    glBindTexture(GL_TEXTURE_2D, polyTexture);
+                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 32, GL_RGB, GL_UNSIGNED_BYTE, bt.texture);
+                }
+
+                bottomInvDisplayData.clear();
+                bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
+                    invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY,                    0.0f, 1.0f, invTileIndex + 25.0f,
+                    invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY+(invTileHeight/2),  0.0f, 0.0f, invTileIndex + 25.0f,
+                    invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY+(invTileHeight/2),  1.0f, 0.0f, invTileIndex + 25.0f,
+
+                    invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY+(invTileHeight/2),  1.0f, 0.0f, invTileIndex + 25.0f,
+                    invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY,                    1.0f, 1.0f, invTileIndex + 25.0f,
+                    invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY,                    0.0f, 1.0f, invTileIndex + 25.0f,
+                });
+
+                bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
+
+                glDrawArrays(GL_TRIANGLES, 0, bottomInvDisplayData.size()/5);
+
+
+                glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+
+                std::string countStr = std::to_string(inventory.nodes[invTileIndex].count);
+
+                float lettersCount = std::strlen(countStr.c_str());
+
+                glm::vec2 letterStart(invStartX, invStartY - 0.02f);
+
+                GlyphFace glyph;
+
+                static float letHeight = (32.0f/SHEIGHT);
+                static float letWidth = (32.0f/SWIDTH);
+
+                for(int l = 0; l < lettersCount; l++) {
+                    glyph.setCharCode(static_cast<int>(countStr.c_str()[l]));
+                    glm::vec2 thisLetterStart(letterStart.x + l*letWidth, letterStart.y);
+                    bottomInvDisplayData.clear();
+                    bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
+                        thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i), thisLetterStart.y,                     glyph.bl.x, glyph.bl.y, -1.0f,
+                        thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i), thisLetterStart.y+letHeight,           glyph.tl.x, glyph.tl.y, -1.0f,
+                        thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i)+letWidth, thisLetterStart.y+letHeight, glyph.tr.x, glyph.tr.y, -1.0f,
+
+                        thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i)+letWidth, thisLetterStart.y+letHeight, glyph.tr.x, glyph.tr.y, -1.0f,
+                        thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i)+letWidth, thisLetterStart.y,           glyph.br.x, glyph.br.y, -1.0f,
+                        thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i), thisLetterStart.y,                     glyph.bl.x, glyph.bl.y, -1.0f
+                    });
+                }
+
+                glDeleteBuffers(1, &vbo2);
+                glGenBuffers(1, &vbo2);
+
+                bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
+
+                glDrawArrays(GL_TRIANGLES, 0, bottomInvDisplayData.size()/5);
+
+            }
     }
 
     TextureFace select(4,0);
 
+    glDeleteBuffers(1, &vbo2);
+    glGenBuffers(1, &vbo2);
+
+    bottomInvDisplayData.clear();
     bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
             invStartX + (((invTileWidth/2) + spacePixels) * slotSelected),                  invStartY,                    select.bl.x, select.bl.y, -1.0f,
             invStartX + (((invTileWidth/2) + spacePixels) * slotSelected),                  invStartY+(invTileHeight/2),  select.tl.x, select.tl.y, -1.0f,
@@ -1935,32 +2073,7 @@ void drawInventoryForegroundElements() {
             invStartX + (((invTileWidth/2) + spacePixels) * slotSelected),                  invStartY,                    select.bl.x, select.bl.y, -1.0f,
         });
 
-    
-    for(int i = 0; i < bottomInvDisplayData.size(); i+= 30) {
-
-            float screenPosx = (bottomInvDisplayData[i+5] + 1.0f) * 0.5f;
-            float screenPosy = (1.0f - bottomInvDisplayData[i+6]) * 0.5f;
-            float screenWidth = invTileWidth / 4;
-            float screenHeight = invTileHeight / 4;
-            float elementID = bottomInvDisplayData[i+4];
-
-            double xpos, ypos;
-            glfwGetCursorPos(WINDOW, &xpos, &ypos);
-            if(xpos > screenPosx * SWIDTH &&
-            xpos < (screenPosx + screenWidth) * SWIDTH &&
-            ypos > screenPosy * SHEIGHT &&
-            ypos < (screenPosy + screenHeight) * SHEIGHT &&
-            elementID != -1.0f) 
-            {
-                mousedOverElement = elementID;
-            }
-        }
-
-    GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
-    glUniform1f(moeLocation, mousedOverElement);
-    GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
-    glUniform1f(coeLocation, clickedOnElement);
-
+    glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
 
     bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
 
@@ -2294,6 +2407,7 @@ int main() {
             drawSelectedBlock();
             drawInventoryBackgroundToBuffer();
 
+            glBindTexture(GL_TEXTURE_2D, TEXTURE_ID);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, PIXELS);
 
             glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -2577,6 +2691,9 @@ int main() {
 
     glfwDestroyWindow(WINDOW);
     glfwTerminate();
+
+    Pa_StopStream(sfxStream);
+    Pa_CloseStream(sfxStream);
 
     Pa_StopStream(musicStream);
     Pa_CloseStream(musicStream);
