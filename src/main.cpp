@@ -1646,11 +1646,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             firstMouse = true;
             mouseCaptured = false;
             if(loopFunc == &gameLoop) {
+                drawingInv = false;
                 goToEscapeMenu();
             }
             
         } else 
-        if(!mouseCaptured && action == 1){
+        if(!mouseCaptured && action == 1 && !drawingInv){
             if(loopFunc == &gameLoop) {
                 currentGuiButtons = nullptr;
             }
@@ -1765,7 +1766,7 @@ void drawSelectedBlock() {
 
 void drawInventoryBackgroundToBuffer() {
     int squareWidth = invTexWidth;
-    int startX = (int)((float)WIDTH * 0.3f);
+    int startX = (int)((float)WIDTH * 0.291f);
     int startY = (int)(15 + yOffset * 70);
     if(drawingInv && loopFunc == &gameLoop) {
         for(int y = 0; y < squareWidth; y++) {
@@ -1821,22 +1822,29 @@ void bindMenuGeometryNoUpload(GLuint vbo) {
 }
 
 void drawInventoryForegroundElements() {
-    if(drawingInv && loopFunc == &gameLoop) {
-        glBindVertexArray(VAO2);
-        glUseProgram(MENUSHADER);
-        glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+    glBindVertexArray(VAO2);
+    glUseProgram(MENUSHADER);
+    glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
 
-        float invTileWidth = ((float)invTexWidth/WIDTH) / 3.5f;
-        float invTileHeight = ((float)invTexWidth/HEIGHT) / 3.5f;
-        float spacePixels = 4.0f/WIDTH;
+    float invTileWidth = ((float)invTexWidth/WIDTH) / 3.5f;
+    float invTileHeight = ((float)invTexWidth/HEIGHT) / 3.5f;
+    float spacePixels = 4.0f/WIDTH;
+
+    TextureFace invFace(3,0);
+
+    if(drawingInv && loopFunc == &gameLoop) {
+        
+
+        
+        
 
         static GLuint vbo;
 
         static std::vector<float> displayData;
 
-        float invStartX = -0.349f;
+        float invStartX = -0.372f;
         float invStartY = -0.48f;
-        TextureFace invFace(3,0);
+        
 
         if(invDisplayDirty) {
             glDeleteBuffers(1, &vbo);
@@ -1846,7 +1854,7 @@ void drawInventoryForegroundElements() {
 
             for(int k = 0; k < 3; k++) {
                 for(int i = 0; i < 6; i++) {
-                    int invTileIndex = k * 6 + i;
+                    int invTileIndex = 6 + k * 6 + i;
                     displayData.insert(displayData.end(), {
                         invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k),                invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
                         invStartX + ((invTileWidth + spacePixels) * i),              invStartY+((invTileHeight + spacePixels) * k)+invTileHeight,  invFace.bl.x, invFace.bl.y, 1.0f * invTileIndex + 1.0f,
@@ -1886,13 +1894,77 @@ void drawInventoryForegroundElements() {
             }
         }
 
-        GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
-        glUniform1f(moeLocation, mousedOverElement);
-        GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
-        glUniform1f(coeLocation, clickedOnElement);
-
+        
         glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
     }
+
+
+
+    GLuint vbo2;
+
+    glDeleteBuffers(1, &vbo2);
+    glGenBuffers(1, &vbo2);
+
+    std::vector<float> bottomInvDisplayData;
+
+    float invStartX = -0.2f;
+    float invStartY = -0.95f;
+
+    for(int i = 0; i < 6; i++) {
+        int invTileIndex = i;
+        bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
+            invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY,                    invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY+(invTileHeight/2),  invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY+(invTileHeight/2),  invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
+
+            invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY+(invTileHeight/2),  invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * i)+(invTileWidth/2), invStartY,                    invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * i),                  invStartY,                    invFace.bl.x, invFace.bl.y, invTileIndex + 25.0f,
+        });
+    }
+
+    TextureFace select(4,0);
+
+    bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
+            invStartX + (((invTileWidth/2) + spacePixels) * slotSelected),                  invStartY,                    select.bl.x, select.bl.y, -1.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * slotSelected),                  invStartY+(invTileHeight/2),  select.tl.x, select.tl.y, -1.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * slotSelected)+(invTileWidth/2), invStartY+(invTileHeight/2),  select.tr.x, select.tr.y, -1.0f,
+
+            invStartX + (((invTileWidth/2) + spacePixels) * slotSelected)+(invTileWidth/2), invStartY+(invTileHeight/2),  select.tr.x, select.tr.y, -1.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * slotSelected)+(invTileWidth/2), invStartY,                    select.br.x, invFace.br.y, -1.0f,
+            invStartX + (((invTileWidth/2) + spacePixels) * slotSelected),                  invStartY,                    select.bl.x, select.bl.y, -1.0f,
+        });
+
+    
+    for(int i = 0; i < bottomInvDisplayData.size(); i+= 30) {
+
+            float screenPosx = (bottomInvDisplayData[i+5] + 1.0f) * 0.5f;
+            float screenPosy = (1.0f - bottomInvDisplayData[i+6]) * 0.5f;
+            float screenWidth = invTileWidth / 4;
+            float screenHeight = invTileHeight / 4;
+            float elementID = bottomInvDisplayData[i+4];
+
+            double xpos, ypos;
+            glfwGetCursorPos(WINDOW, &xpos, &ypos);
+            if(xpos > screenPosx * SWIDTH &&
+            xpos < (screenPosx + screenWidth) * SWIDTH &&
+            ypos > screenPosy * SHEIGHT &&
+            ypos < (screenPosy + screenHeight) * SHEIGHT &&
+            elementID != -1.0f) 
+            {
+                mousedOverElement = elementID;
+            }
+        }
+
+    GLuint moeLocation = glGetUniformLocation(MENUSHADER, "mousedOverElement");
+    glUniform1f(moeLocation, mousedOverElement);
+    GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
+    glUniform1f(coeLocation, clickedOnElement);
+
+
+    bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
+
+    glDrawArrays(GL_TRIANGLES, 0, bottomInvDisplayData.size()/5);
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
