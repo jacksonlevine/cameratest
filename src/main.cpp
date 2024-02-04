@@ -174,6 +174,9 @@ float clickedOnElement = 0.0f;
 float mousedOverElement = 0.0f;
 
 
+bool JUMPKEYHELD = false;
+bool JUMPING = false;
+
 
 bool GOINGDOWN = false;
 bool GOINGUP = false;
@@ -805,7 +808,7 @@ void castRaysFromCamera() {
         }
     }
 
-    if(isWalking) {
+    if(isWalking && !JUMPING) {
         if(stepTimer > stepInterval) {
             stepTimer = 0.0f;
             sfs.playNextInSeries(stoneStepSeries);
@@ -1417,9 +1420,6 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
     }
 }
 
-bool JUMPKEYHELD = false;
-bool JUMPING = false;
-
 void stepGoingDown() {
     static bool phaseTwo = false;
     static float goingDownTimer = 0.0f;
@@ -1525,6 +1525,7 @@ void stepJumping() {
             if(jumper > 0.0f) {
                 jumper -= ((maxJumpHeight+0.1)-jumper) * deltaTime * 9.0f;
             } else {
+                sfs.playNextInSeries(stoneStepSeries);
                 jumper = 0.0f;
                 jumpHeightReached = false;
                 JUMPING = false;
