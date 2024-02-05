@@ -67,6 +67,9 @@ SoundEffect inventoryClose = sfs.add("assets/sfx/inventoryclose.mp3");
 SoundEffect buttonHover = sfs.add("assets/sfx/buttonover.mp3");
 SoundEffect buttonPress = sfs.add("assets/sfx/buttonpress.mp3");
 
+SoundEffect pickInInventory = sfs.add("assets/sfx/pickininventory.mp3");
+SoundEffect placeInInventory = sfs.add("assets/sfx/placeininventory.mp3");
+
 SoundEffectSeries stoneStepSeries{
     {stoneStep1, stoneStep2, stoneStep3, stoneStep4}
 };
@@ -1945,7 +1948,14 @@ void drawInventoryForegroundElements() {
                         // << "\ncanStack: " <<  std::to_string(inventory.nodes[invTileIndex].canStack) << 
                         // "\ncanPlace: " << std::to_string(inventory.nodes[invTileIndex].canPlace) << 
                         // "\nflags: " << std::to_string(inventory.nodes[invTileIndex].flags) << "\n";
-                        
+
+                        if(itemOnMouse.id == 0 && inventory.nodes[invTileIndex].id != 0) {
+                            sfs.play(pickInInventory);
+                        }
+                        if(itemOnMouse.id != 0 && inventory.nodes[invTileIndex].id == 0) {
+                            sfs.play(placeInInventory);
+                        }
+
                         if(inventory.nodes[invTileIndex].id == itemOnMouse.id &&
                             inventory.nodes[invTileIndex].canStack == itemOnMouse.canStack &&
                             inventory.nodes[invTileIndex].canPlace == itemOnMouse.canPlace &&
@@ -1954,6 +1964,7 @@ void drawInventoryForegroundElements() {
                             
                             inventory.nodes[invTileIndex].count += itemOnMouse.count;
                             itemOnMouse = ItemNode{};
+                            sfs.play(placeInInventory);
                         } else {
                             ItemNode buf = itemOnMouse;
                             itemOnMouse = inventory.nodes[invTileIndex];
@@ -2088,6 +2099,13 @@ void drawInventoryForegroundElements() {
 
             if(clickedOnElement == elementID && mouseClick) {
 
+                if(itemOnMouse.id == 0 && inventory.nodes[invTileIndex].id != 0) {
+                            sfs.play(pickInInventory);
+                        }
+                        if(itemOnMouse.id != 0 && inventory.nodes[invTileIndex].id == 0) {
+                            sfs.play(placeInInventory);
+                        }
+
                 if(inventory.nodes[invTileIndex].id == itemOnMouse.id &&
                     inventory.nodes[invTileIndex].canStack == itemOnMouse.canStack &&
                     inventory.nodes[invTileIndex].canPlace == itemOnMouse.canPlace &&
@@ -2095,6 +2113,7 @@ void drawInventoryForegroundElements() {
                         
                     inventory.nodes[invTileIndex].count += itemOnMouse.count;
                     itemOnMouse = ItemNode{};
+                    sfs.play(placeInInventory);
                 } else {
                     ItemNode buf = itemOnMouse;
                     itemOnMouse = inventory.nodes[invTileIndex];
