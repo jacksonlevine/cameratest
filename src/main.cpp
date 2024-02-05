@@ -73,6 +73,28 @@ SoundEffect placeInInventory = sfs.add("assets/sfx/placeininventory.mp3");
 SoundEffectSeries stoneStepSeries{
     {stoneStep1, stoneStep2, stoneStep3, stoneStep4}
 };
+
+SoundEffectSeries stonePlaceSeries{
+    {sfs.add("assets/sfx/stoneplace1.mp3"),
+    sfs.add("assets/sfx/stoneplace2.mp3"),
+    sfs.add("assets/sfx/stoneplace3.mp3")}
+};
+
+SoundEffectSeries glassPlaceSeries{
+    {sfs.add("assets/sfx/glassplace1.mp3"),
+    sfs.add("assets/sfx/glassplace2.mp3"),
+    sfs.add("assets/sfx/glassplace3.mp3"),
+    sfs.add("assets/sfx/glassplace4.mp3")}
+};
+
+SoundEffectSeries plantPlaceSeries{
+    {sfs.add("assets/sfx/plantplace1.mp3"),
+    sfs.add("assets/sfx/plantplace2.mp3"),
+    sfs.add("assets/sfx/plantplace3.mp3")}
+};
+
+
+
 float stepTimer = 0.0f;
 float stepInterval = 0.3f;
 
@@ -111,18 +133,23 @@ PaStream* sfxStream;
 std::vector<float> audioData1; // First audio file data
 std::vector<float> audioData2; // Second audio file data
 std::vector<float> audioData3;
+std::vector<float> audioData4;
 
 enum CurrentSong {
     MAINMENU,
     SHUFFLIN,
-    SHOP
+    SHOP,
+    FUCKEDUPSONG
 };
 
 CurrentSong currentSong;
 
+CurrentSong songBeforeFuckedUp;
+
 size_t dataIndex1 = 0;
 size_t dataIndex2 = 0;
 size_t dataIndex3 = 0;
+size_t dataIndex4 = 0;
 
 static int musicCallback(const void* inputBuffer, void* outputBuffer,
                          unsigned long framesPerBuffer,
@@ -145,7 +172,11 @@ static int musicCallback(const void* inputBuffer, void* outputBuffer,
             *out++ = audioData3[dataIndex3 * 2];     // Left channel
             *out++ = audioData3[dataIndex3 * 2 + 1]; // Right channel
             dataIndex3 = (dataIndex3 + 1) % (audioData3.size() / 2);
-        }
+        } else if(currentSong == FUCKEDUPSONG) {
+            *out++ = audioData4[dataIndex4 * 2];     // Left channel
+            *out++ = audioData4[dataIndex4 * 2 + 1]; // Right channel
+            dataIndex4 = (dataIndex4 + 1) % (audioData4.size() / 2);
+        } 
     }
     return paContinue;
 }
@@ -367,6 +398,7 @@ struct BlockType {
     GLubyte *texture;
     bool transparent;
     bool isCrossMesh;
+    SoundEffectSeries placeSeries = stonePlaceSeries;
 };
 
 
@@ -602,7 +634,8 @@ void loadTexture() {
     {150, BlockType{
         glassTexture,
         true,
-        false
+        false,
+        glassPlaceSeries
     }},
     {1, BlockType{
         selectTexture,
@@ -612,7 +645,8 @@ void loadTexture() {
     {50, BlockType{
         plantTexture,
         true,
-        true
+        true,
+        plantPlaceSeries
     }}
     ,
     {5, BlockType{
@@ -628,7 +662,8 @@ void loadTexture() {
     {51, BlockType{
         flowerTexture,
         true,
-        true
+        true,
+        plantPlaceSeries
     }},
     {52, BlockType{
         ladderTexture,
@@ -648,7 +683,8 @@ void loadTexture() {
     {55, BlockType{
         rubyGemTexture,
         true,
-        true
+        true,
+        glassPlaceSeries
     }},
     {56, BlockType{
         shopWallTexture,
@@ -1371,6 +1407,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                 if(mapInd != -1) {
                     if(MAPS[LAYER][mapInd] != 0) {
                         if(inventory.addItem(ItemNode{MAPS[LAYER][mapInd], 1})) {
+                            sfs.playNextInSeries(blockTypes.at(MAPS[LAYER][mapInd]).placeSeries);
                             MAPS[LAYER][mapInd] = 0;
                         }
                     }
@@ -1395,14 +1432,17 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                     int mapInd = mapIndexFromCoord(viewedBlock.x, viewedBlock.y);
                     if(mapInd != -1) {
                         if(MAPS[LAYER][mapInd] == 0) {
+                            
                             if(inventory.nodes[slotSelected].id == 52) {
                                 loadMap(LAYER + 1);
                                 if(MAPS[LAYER+1][mapInd] == 0 || MAPS[LAYER+1][mapInd] == 52) {
+                                    sfs.playNextInSeries(blockTypes.at(52).placeSeries);
                                     MAPS[LAYER][mapInd] = 52;
                                 } else {
                                     textView.addMessageToHeap("You cannot place a mineshaft here, there is no empty space below!");
                                 }
                             } else {
+                                sfs.playNextInSeries(blockTypes.at(inventory.nodes[slotSelected].id).placeSeries);
                                 MAPS[LAYER][mapInd] = inventory.nodes[slotSelected].id;
                             }
                             if(inventory.nodes[slotSelected].count == 1) {
@@ -1744,6 +1784,16 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     
     if(key == GLFW_KEY_EQUAL && action == 1) {
         FUCKEDUP = !FUCKEDUP;
+        static glm::ivec3 prevBackgroundColor;
+        if(FUCKEDUP) {
+            songBeforeFuckedUp = currentSong;
+            currentSong = FUCKEDUPSONG;
+            prevBackgroundColor = BACKGROUNDCOLOR;
+            BACKGROUNDCOLOR = glm::ivec3(0,0,0);
+        } else {
+            currentSong = songBeforeFuckedUp;
+            BACKGROUNDCOLOR = prevBackgroundColor;
+        }
     }
 
 
@@ -2384,6 +2434,7 @@ int main() {
     audioData1 = loadAudioFile("assets/song1.mp3");
     audioData2 = loadAudioFile("assets/song2.mp3");
     audioData3 = loadAudioFile("assets/song3.mp3");
+    audioData4 = loadAudioFile("assets/song4.mp3");
 
 
     PaStreamParameters outputParameters;
