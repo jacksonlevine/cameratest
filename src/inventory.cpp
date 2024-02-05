@@ -1,5 +1,12 @@
 #include "inventory.h"
 
+bool ItemNode::operator==(const ItemNode& other) const {
+    return id == other.id &&
+           canStack == other.canStack &&
+           canPlace == other.canPlace &&
+           flags == other.flags;
+}
+
 void Inventory::fakeLoadInventory() {
     nodes[0] = ItemNode{
         52, 4
@@ -52,7 +59,7 @@ bool Inventory::addItem(ItemNode item) {
             return true;
         }
     } else {
-        (*itemIt).count += 1;
+        (*itemIt).count += 1; 
         return true;
     }
 }

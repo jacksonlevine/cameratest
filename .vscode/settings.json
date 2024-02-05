@@ -95,6 +95,7 @@
         "xtree": "cpp",
         "xutility": "cpp",
         "stdfloat": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "*.ipp": "cpp"
     }
 }

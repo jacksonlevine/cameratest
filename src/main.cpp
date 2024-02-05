@@ -46,6 +46,10 @@ Inventory inventory;
 bool drawingInv = false;
 bool invDisplayDirty = true;
 
+bool mouseClick = false;
+
+ItemNode itemOnMouse;
+
 SoundFXSystem sfs;
 
 SoundEffect doorSound = sfs.add("assets/sfx/door.mp3");
@@ -1344,6 +1348,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (action == 1) {
         clickedOnElement = mousedOverElement;
+        mouseClick = true;
     } else {
         if(currentGuiButtons != nullptr) {
             for(auto &button : *currentGuiButtons) {
@@ -1934,6 +1939,23 @@ void drawInventoryForegroundElements() {
                     GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
                     glUniform1f(coeLocation, clickedOnElement);
 
+                    if(clickedOnElement == elementID && mouseClick) {
+                        
+                        if(inventory.nodes[invTileIndex].id == itemOnMouse.id &&
+                            inventory.nodes[invTileIndex].canStack == itemOnMouse.canStack &&
+                            inventory.nodes[invTileIndex].canPlace == itemOnMouse.canPlace &&
+                            inventory.nodes[invTileIndex].flags == itemOnMouse.flags) {
+
+                            inventory.nodes[invTileIndex].count += itemOnMouse.count;
+                            itemOnMouse = ItemNode{};
+                        } else {
+                            ItemNode buf = itemOnMouse;
+                            itemOnMouse = inventory.nodes[invTileIndex];
+                            inventory.nodes[invTileIndex] = buf;
+                            mouseClick = false;
+                        }
+                    }
+
                     glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
 
 
@@ -1979,11 +2001,12 @@ void drawInventoryForegroundElements() {
 
                                 static float letHeight = (32.0f/SHEIGHT);
                                 static float letWidth = (32.0f/SWIDTH);
-
+                                
+                                displayData.clear();
                                 for(int l = 0; l < lettersCount; l++) {
                                     glyph.setCharCode(static_cast<int>(countStr.c_str()[l]));
-                                    glm::vec2 thisLetterStart(letterStart.x + l*letWidth, letterStart.y);
-                                    displayData.clear();
+                                    glm::vec2 thisLetterStart(letterStart.x + l*(letWidth/1.5f), letterStart.y);
+                                    
                                     displayData.insert(displayData.end(), {
                                         thisLetterStart.x+ ((invTileWidth + spacePixels) * i),          thisLetterStart.y+((invTileHeight + spacePixels) * k),           glyph.bl.x, glyph.bl.y, -1.0f,
                                         thisLetterStart.x+ ((invTileWidth + spacePixels) * i),          thisLetterStart.y+((invTileHeight + spacePixels) * k)+letHeight, glyph.tl.x, glyph.tl.y, -1.0f,
@@ -2057,6 +2080,25 @@ void drawInventoryForegroundElements() {
             GLuint coeLocation = glGetUniformLocation(MENUSHADER, "clickedOnElement");
             glUniform1f(coeLocation, clickedOnElement);
 
+            if(clickedOnElement == elementID && mouseClick) {
+
+                if(inventory.nodes[invTileIndex].id == itemOnMouse.id &&
+                    inventory.nodes[invTileIndex].canStack == itemOnMouse.canStack &&
+                    inventory.nodes[invTileIndex].canPlace == itemOnMouse.canPlace &&
+                    inventory.nodes[invTileIndex].flags == itemOnMouse.flags) {
+                        
+                    inventory.nodes[invTileIndex].count += itemOnMouse.count;
+                    itemOnMouse = ItemNode{};
+                } else {
+                    ItemNode buf = itemOnMouse;
+                    itemOnMouse = inventory.nodes[invTileIndex];
+                    inventory.nodes[invTileIndex] = buf;
+                    mouseClick = false;
+                }
+            }
+
+            //if(clickedOnElement)
+
             glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
 
             bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
@@ -2107,11 +2149,12 @@ void drawInventoryForegroundElements() {
 
                 static float letHeight = (32.0f/SHEIGHT);
                 static float letWidth = (32.0f/SWIDTH);
-
+                
+                bottomInvDisplayData.clear();
                 for(int l = 0; l < lettersCount; l++) {
                     glyph.setCharCode(static_cast<int>(countStr.c_str()[l]));
-                    glm::vec2 thisLetterStart(letterStart.x + l*letWidth, letterStart.y);
-                    bottomInvDisplayData.clear();
+                    glm::vec2 thisLetterStart(letterStart.x + l*(letWidth/1.5f), letterStart.y);
+                    
                     bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
                         thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i), thisLetterStart.y,                     glyph.bl.x, glyph.bl.y, -1.0f,
                         thisLetterStart.x+ (((invTileWidth/2) + spacePixels) * i), thisLetterStart.y+letHeight,           glyph.tl.x, glyph.tl.y, -1.0f,
@@ -2130,6 +2173,42 @@ void drawInventoryForegroundElements() {
 
                 glDrawArrays(GL_TRIANGLES, 0, bottomInvDisplayData.size()/5);
 
+            }
+
+
+
+            if(itemOnMouse.id != 0) {
+                glDeleteBuffers(1, &vbo2);
+                glGenBuffers(1, &vbo2);
+                BlockType& bt = blockTypes.at(itemOnMouse.id);
+                if(bt.transparent) {
+                    glBindTexture(GL_TEXTURE_2D, polyTextureTransparent);
+                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 32, GL_RGBA, GL_UNSIGNED_BYTE, bt.texture);
+                } else {
+                    glBindTexture(GL_TEXTURE_2D, polyTexture);
+                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 32, GL_RGB, GL_UNSIGNED_BYTE, bt.texture);
+                }
+
+                double xpos, ypos;
+                glfwGetCursorPos(WINDOW, &xpos, &ypos);
+
+                float normalizedX = (2.0f * xpos) / SWIDTH - 1.0f;
+                float normalizedY = 1.0f - (2.0f * ypos) / SHEIGHT;
+
+                bottomInvDisplayData.clear();
+                bottomInvDisplayData.insert(bottomInvDisplayData.end(), {
+                    normalizedX,                  normalizedY,                    0.0f, 1.0f, invTileIndex + 25.0f,
+                    normalizedX,                  normalizedY+(invTileHeight/2),  0.0f, 0.0f, invTileIndex + 25.0f,
+                    normalizedX+(invTileWidth/2), normalizedY+(invTileHeight/2),  1.0f, 0.0f, invTileIndex + 25.0f,
+
+                    normalizedX+(invTileWidth/2), normalizedY+(invTileHeight/2),  1.0f, 0.0f, invTileIndex + 25.0f,
+                    normalizedX+(invTileWidth/2), normalizedY,                    1.0f, 1.0f, invTileIndex + 25.0f,
+                    normalizedX,                  normalizedY,                    0.0f, 1.0f, invTileIndex + 25.0f,
+                });
+
+                bindMenuGeometry(vbo2, bottomInvDisplayData.data(), bottomInvDisplayData.size());
+
+                glDrawArrays(GL_TRIANGLES, 0, bottomInvDisplayData.size()/5);
             }
     }
 

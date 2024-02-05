@@ -14,6 +14,7 @@ struct ItemNode {
     bool canStack = true;
     bool canPlace = true;
     GLubyte flags = 0b00000000;
+    bool operator==(const ItemNode& other) const;
 };
 
 class Inventory {
