@@ -3,6 +3,10 @@
 
 #include <GLFW/glfw3.h>
 #include <algorithm>
+#include <fstream>
+#include <string>
+#include <filesystem>
+#include <sstream>
 
 struct ItemNode {
     GLubyte id;
@@ -18,6 +22,9 @@ public:
     ItemNode nodes[numberOfSlots];
     void fakeLoadInventory(); 
     bool addItem(ItemNode item);
+
+    void saveToFile();
+    void loadFromFile();
 };
 
 #endif 

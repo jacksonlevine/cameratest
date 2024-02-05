@@ -1602,17 +1602,25 @@ void goToMainMenu() {
     currentGuiButtons = &buttons;
 }
 
+
+void saveGame() {
+    for(int i = 0; i <= FURTHESTLOADED; i++) {
+        std::string mapPath("maps/map");
+        mapPath += std::to_string(i) + ".bmp";
+        int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
+    }
+    if(!INSHOP) {
+        saveCameraPosition();
+    }
+    inventory.saveToFile();
+}
+
+
+
 void goToEscapeMenu() {
     static std::vector<GUIButton> buttons = {
         GUIButton(0.0f, 0.2f, "Save and exit to main menu", 0.0f, 1.0f, [](){
-            for(int i = 0; i <= FURTHESTLOADED; i++) {
-                std::string mapPath("maps/map");
-                mapPath += std::to_string(i) + ".bmp";
-                int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
-            }
-            if(!INSHOP) {
-                saveCameraPosition();
-            }
+            saveGame();
             goToMainMenu();
         }),
         GUIButton(0.0f, 0.1f, "Back to game", 0.0f, 2.0f, [](){
@@ -1927,6 +1935,74 @@ void drawInventoryForegroundElements() {
                     glUniform1f(coeLocation, clickedOnElement);
 
                     glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
+
+
+
+                            if(inventory.nodes[invTileIndex].id != 0) {
+
+                                glDeleteBuffers(1, &vbo);
+                                glGenBuffers(1, &vbo);
+                                BlockType& bt = blockTypes.at(inventory.nodes[invTileIndex].id);
+                                if(bt.transparent) {
+                                    glBindTexture(GL_TEXTURE_2D, polyTextureTransparent);
+                                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 32, GL_RGBA, GL_UNSIGNED_BYTE, bt.texture);
+                                } else {
+                                    glBindTexture(GL_TEXTURE_2D, polyTexture);
+                                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 32, 32, GL_RGB, GL_UNSIGNED_BYTE, bt.texture);
+                                }
+
+                                displayData.clear();
+                                displayData.insert(displayData.end(), {
+                                    (invTileWidth/4)+invStartX + ((invTileWidth + spacePixels) * i),                  (invTileHeight/4)+invStartY+((invTileHeight + spacePixels) * k),                    0.0f, 1.0f, invTileIndex + 25.0f,
+                                    (invTileWidth/4)+invStartX + ((invTileWidth + spacePixels) * i),                  (invTileHeight/4)+invStartY+((invTileHeight + spacePixels) * k)+(invTileHeight/2),  0.0f, 0.0f, invTileIndex + 25.0f,
+                                    (invTileWidth/4)+invStartX + ((invTileWidth + spacePixels) * i)+(invTileWidth/2), (invTileHeight/4)+invStartY+((invTileHeight + spacePixels) * k)+(invTileHeight/2),  1.0f, 0.0f, invTileIndex + 25.0f,
+
+                                    (invTileWidth/4)+invStartX + ((invTileWidth + spacePixels) * i)+(invTileWidth/2), (invTileHeight/4)+invStartY+((invTileHeight + spacePixels) * k)+(invTileHeight/2),  1.0f, 0.0f, invTileIndex + 25.0f,
+                                    (invTileWidth/4)+invStartX + ((invTileWidth + spacePixels) * i)+(invTileWidth/2), (invTileHeight/4)+invStartY+((invTileHeight + spacePixels) * k),                    1.0f, 1.0f, invTileIndex + 25.0f,
+                                    (invTileWidth/4)+invStartX + ((invTileWidth + spacePixels) * i),                  (invTileHeight/4)+invStartY+((invTileHeight + spacePixels) * k),                    0.0f, 1.0f, invTileIndex + 25.0f,
+                                });
+
+                                bindMenuGeometry(vbo, displayData.data(), displayData.size());
+
+                                glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
+
+
+                                glBindTexture(GL_TEXTURE_2D, MENUTEXTURE);
+
+                                std::string countStr = std::to_string(inventory.nodes[invTileIndex].count);
+
+                                float lettersCount = std::strlen(countStr.c_str());
+
+                                glm::vec2 letterStart(invStartX, invStartY - 0.02f);
+
+                                GlyphFace glyph;
+
+                                static float letHeight = (32.0f/SHEIGHT);
+                                static float letWidth = (32.0f/SWIDTH);
+
+                                for(int l = 0; l < lettersCount; l++) {
+                                    glyph.setCharCode(static_cast<int>(countStr.c_str()[l]));
+                                    glm::vec2 thisLetterStart(letterStart.x + l*letWidth, letterStart.y);
+                                    displayData.clear();
+                                    displayData.insert(displayData.end(), {
+                                        thisLetterStart.x+ ((invTileWidth + spacePixels) * i),          thisLetterStart.y+((invTileHeight + spacePixels) * k),           glyph.bl.x, glyph.bl.y, -1.0f,
+                                        thisLetterStart.x+ ((invTileWidth + spacePixels) * i),          thisLetterStart.y+((invTileHeight + spacePixels) * k)+letHeight, glyph.tl.x, glyph.tl.y, -1.0f,
+                                        thisLetterStart.x+ ((invTileWidth + spacePixels) * i)+letWidth, thisLetterStart.y+((invTileHeight + spacePixels) * k)+letHeight, glyph.tr.x, glyph.tr.y, -1.0f,
+
+                                        thisLetterStart.x+ ((invTileWidth + spacePixels) * i)+letWidth, thisLetterStart.y+((invTileHeight + spacePixels) * k)+letHeight, glyph.tr.x, glyph.tr.y, -1.0f,
+                                        thisLetterStart.x+ ((invTileWidth + spacePixels) * i)+letWidth, thisLetterStart.y+((invTileHeight + spacePixels) * k),           glyph.br.x, glyph.br.y, -1.0f,
+                                        thisLetterStart.x+ ((invTileWidth + spacePixels) * i),          thisLetterStart.y+((invTileHeight + spacePixels) * k),           glyph.bl.x, glyph.bl.y, -1.0f
+                                    });
+                                }
+
+                                glDeleteBuffers(1, &vbo);
+                                glGenBuffers(1, &vbo);
+
+                                bindMenuGeometry(vbo, displayData.data(), displayData.size());
+
+                                glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
+
+                            }
 
                 }
             }
@@ -2669,7 +2745,8 @@ int main() {
     loopFunc = &splashLoop;
    
 
-    inventory.fakeLoadInventory();
+    //inventory.fakeLoadInventory();
+    inventory.loadFromFile();
 
     while(!glfwWindowShouldClose(WINDOW)) {
         (*loopFunc)();
@@ -2679,14 +2756,7 @@ int main() {
 
     //Save the map
     //int saveResult = stbi_write_bmp("assets/map.bmp", MAPWIDTH, MAPWIDTH, 1, MAP);
-    for(int i = 0; i <= FURTHESTLOADED; i++) {
-        std::string mapPath("maps/map");
-        mapPath += std::to_string(i) + ".bmp";
-        int saveResult = stbi_write_bmp(mapPath.c_str(), MAPWIDTH, MAPWIDTH, 1, MAPS[i]);
-    }
-    if(!INSHOP) {
-        saveCameraPosition();
-    }
+    saveGame();
     
 
     glfwDestroyWindow(WINDOW);
