@@ -1940,20 +1940,26 @@ void drawInventoryForegroundElements() {
                     glUniform1f(coeLocation, clickedOnElement);
 
                     if(clickedOnElement == elementID && mouseClick) {
+
+                        // std::cout << "Item: \n" << "id: " << std::to_string(inventory.nodes[invTileIndex].id)
+                        // << "\ncanStack: " <<  std::to_string(inventory.nodes[invTileIndex].canStack) << 
+                        // "\ncanPlace: " << std::to_string(inventory.nodes[invTileIndex].canPlace) << 
+                        // "\nflags: " << std::to_string(inventory.nodes[invTileIndex].flags) << "\n";
                         
                         if(inventory.nodes[invTileIndex].id == itemOnMouse.id &&
                             inventory.nodes[invTileIndex].canStack == itemOnMouse.canStack &&
                             inventory.nodes[invTileIndex].canPlace == itemOnMouse.canPlace &&
-                            inventory.nodes[invTileIndex].flags == itemOnMouse.flags) {
-
+                            inventory.nodes[invTileIndex].flags == itemOnMouse.flags &&
+                            itemOnMouse.canStack == true) {
+                            
                             inventory.nodes[invTileIndex].count += itemOnMouse.count;
                             itemOnMouse = ItemNode{};
                         } else {
                             ItemNode buf = itemOnMouse;
                             itemOnMouse = inventory.nodes[invTileIndex];
                             inventory.nodes[invTileIndex] = buf;
-                            mouseClick = false;
                         }
+                        mouseClick = false;
                     }
 
                     glDrawArrays(GL_TRIANGLES, 0, displayData.size()/5);
@@ -2093,8 +2099,8 @@ void drawInventoryForegroundElements() {
                     ItemNode buf = itemOnMouse;
                     itemOnMouse = inventory.nodes[invTileIndex];
                     inventory.nodes[invTileIndex] = buf;
-                    mouseClick = false;
                 }
+                mouseClick = false;
             }
 
             //if(clickedOnElement)

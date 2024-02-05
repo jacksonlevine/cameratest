@@ -94,10 +94,10 @@ void Inventory::loadFromFile() {
                     nodes[itemIndex].count = std::stoi(word);
                 }
                 if(lineIndex == 2) {
-                    nodes[itemIndex].canStack = (word == "true");
+                    nodes[itemIndex].canStack = (word == "1");
                 }
                 if(lineIndex == 3) {
-                    nodes[itemIndex].canPlace = (word == "true");
+                    nodes[itemIndex].canPlace = (word == "1");
                 }
                 if(lineIndex == 4) {
                     nodes[itemIndex].flags = std::stoi(word);
