@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 set(BUILD_SHARED_LIBS OFF)
 
-add_executable(main src/main.cpp src/collcage.cpp src/glyphface.cpp src/textview.cpp src/crossmesh.cpp src/textureface.cpp src/guielement.cpp src/inventory.cpp src/ringbuffer.cpp src/soundfxsystem.cpp)
+add_executable(main src/main.cpp src/collcage.cpp src/glyphface.cpp src/textview.cpp src/crossmesh.cpp src/textureface.cpp src/guielement.cpp src/inventory.cpp src/ringbuffer.cpp src/soundfxsystem.cpp src/opalframes.cpp)
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")

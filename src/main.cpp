@@ -14,6 +14,8 @@
 
 #include "textview.h"
 
+#include "opalframes.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -40,6 +42,11 @@
 #include "inventory.h"
 #include "soundfxsystem.h"
 
+float PI = std::acos(-1.0f);
+
+float TWOPI = std::acos(-1.0f) * 2.0f;
+
+OpalFrames opalFrames;
 
 Inventory inventory;
 
@@ -342,6 +349,12 @@ void loadMap(int layer) {
                     } else {
                         map[ind] = 0;
                     }
+
+                    if(layer >= 10) {
+                        if((float)rand()/RAND_MAX > 0.999f) {
+                            map[ind] = 57;
+                        }
+                    }
                 }
             }
             MAPS.push_back(map);
@@ -399,6 +412,7 @@ struct BlockType {
     bool transparent;
     bool isCrossMesh;
     SoundEffectSeries placeSeries = stonePlaceSeries;
+    bool opalescent = false;
 };
 
 
@@ -439,6 +453,9 @@ GLubyte* rubyGemTexture;
 GLubyte* shopFloorTexture;
 GLubyte* shopWallTexture;
 GLubyte* inventoryTexture;
+GLubyte* opalOreTexture;
+GLubyte* opalTexture;
+GLubyte* opalGemTexture;
 
 GLuint polyTexture;
 GLuint polyTextureTransparent;
@@ -619,6 +636,24 @@ void loadTexture() {
         std::cout << "Failed to load texture ivenxtoryTuedxture" << std::endl;
     }
 
+    opalOreTexture = stbi_load("assets/opalore.png", &width, &height, &nrChannels, 0);
+    if (!opalOreTexture)
+    {
+        std::cout << "Failed to load texture opalOreTexture" << std::endl;
+    }
+
+    opalTexture = stbi_load("assets/opal.png", &width, &height, &nrChannels, 0);
+    if (!opalTexture)
+    {
+        std::cout << "Failed to load texture opalTexture" << std::endl;
+    }
+
+    opalGemTexture = stbi_load("assets/opalgem.png", &width, &height, &nrChannels, 0);
+    if (!opalGemTexture)
+    {
+        std::cout << "Failed to load texture opalGemTexture" << std::endl;
+    }
+
 
     blockTypes = {
     {255, BlockType{
@@ -690,6 +725,27 @@ void loadTexture() {
         shopWallTexture,
         false,
         false
+    }},
+    {57, BlockType{
+        opalOreTexture,
+        false,
+        false,
+        stonePlaceSeries,
+        true
+    }},
+    {58, BlockType{
+        opalTexture,
+        false,
+        false,
+        stonePlaceSeries,
+        true
+    }},
+    {59, BlockType{
+        opalGemTexture,
+        true,
+        true,
+        stonePlaceSeries,
+        true
     }}
 };
 }
@@ -786,6 +842,18 @@ glm::vec2 directionFromAngle(float angle) {
         std::cos(normalizedAngle),
         std::sin(normalizedAngle) 
     );
+}
+
+float angleFromDirection(const glm::vec2& direction) {
+    // Calculate the angle using atan2 function
+    float angle = std::atan2(direction.y, direction.x);
+
+    // Ensure angle is in the range [0, 2*pi)
+    if (angle < 0) {
+        angle += 2.0f * static_cast<float>(std::acos(-1.0f));
+    }
+    
+    return angle;
 }
 
 int mapIndexFromCoord(int x, int z) {
@@ -1311,7 +1379,7 @@ void castRaysFromCamera() {
                         if(trav < height) {
                             
 
-                            if(blockHere.transparent) {
+                            if(blockHere.transparent && !blockHere.opalescent) {
                                 glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
                                 if(color.a > 0) {
                                     if(color.a == 255 || dqSizeWas == 1) {
@@ -1326,8 +1394,43 @@ void castRaysFromCamera() {
 
                                     
                                 }
-                            } else
-                            {   
+                            } else if(blockHere.opalescent && !blockHere.transparent) {
+
+                                    glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, 3);
+                                    if(color.g == 255) {
+
+                                        int brightAdd = color.b;
+                                        int brightSub = color.r;
+
+                                        glm::vec2 direction = h.hitSpot - cameraPosition;
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
+                                        color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
+                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    } else {
+                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    }
+
+                            } else if(blockHere.opalescent && blockHere.transparent) { 
+
+                                glm::ivec4 colora = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
+                                
+                                if(colora.a > 0) {
+                                    if(colora.g == 255) {
+
+                                        int brightAdd = colora.b;
+                                        int brightSub = colora.r;
+                                        glm::vec2 direction = h.hitSpot - cameraPosition;
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
+                                        glm::ivec3 color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
+                                         setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    } else {
+                                        setPixel(ind, glm::mix(colora.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(colora.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(colora.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    }
+                                }
+
+                            } else {
                                 glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, 3);
                                 setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                             }
@@ -1347,7 +1450,7 @@ void castRaysFromCamera() {
                         if(trav < height) {
                             
                             
-                            if(blockHere.transparent) {
+                            if(blockHere.transparent && !blockHere.opalescent) {
                                 glm::ivec4 color = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
                                 if(color.a > 0) {
                                     if(color.a == 255 || dqSizeWas == 1) {
@@ -1359,9 +1462,47 @@ void castRaysFromCamera() {
                                         existingColor.b = std::min(255, existingColor.b + (int)((float)glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE) * (color.a/255.0f)));
                                         setPixel(ind, existingColor.r, existingColor.g, existingColor.b);
                                     }
+
+                                    
                                 }
-                            } else
-                            {   
+                            } else if(blockHere.opalescent && !blockHere.transparent) {
+
+                                    glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, 3);
+                                    if(color.g == 255) {
+
+                                        int brightAdd = color.b;
+                                        int brightSub = color.r;
+
+                                        glm::vec2 direction = h.hitSpot - cameraPosition;
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
+                                        color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
+                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    } else {
+                                        setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    }
+
+                            } else if(blockHere.opalescent && blockHere.transparent) { 
+
+                                glm::ivec4 colora = colorWithAlphaFromUV(uvX, uvY, blockHere.texture);
+                                
+                                if(colora.a > 0) {
+                                    if(colora.g == 255) {
+
+                                        int brightAdd = colora.b;
+                                        int brightSub = colora.r;
+
+                                        glm::vec2 direction = h.hitSpot - cameraPosition;
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
+                                        glm::ivec3 color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
+                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    } else {
+                                        setPixel(ind, glm::mix(colora.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(colora.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(colora.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                    }
+                                }
+
+                            } else {
                                 glm::ivec3 color = colorFromUV(uvX, uvY, blockHere.texture, 3);
                                 setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                             }
@@ -2426,6 +2567,8 @@ void drawSplashScreen() {
 //#include <Windows.h>
 //int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 int main() {
+
+    std::cout << "opalframes: " << std::to_string(opalFrames.frames.size()) << "\n";
 
     PaError err;
 
