@@ -1424,7 +1424,7 @@ void castRaysFromCamera() {
                                         int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         glm::ivec3 color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
-                                         setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                         setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
                                     } else {
                                         setPixel(ind, glm::mix(colora.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(colora.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(colora.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                                     }
@@ -1436,7 +1436,7 @@ void castRaysFromCamera() {
                             }
                             
                         } else {
-                            break;
+                            break; 
                         }
                         
                     }
@@ -1477,7 +1477,7 @@ void castRaysFromCamera() {
                                         int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
-                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
                                     } else {
                                         setPixel(ind, glm::mix(color.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(color.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(color.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                                     }
@@ -1496,7 +1496,7 @@ void castRaysFromCamera() {
                                         int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         glm::ivec3 color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
-                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
+                                        setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
                                     } else {
                                         setPixel(ind, glm::mix(colora.r, BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(colora.g, BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(colora.b, BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
                                     }
