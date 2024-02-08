@@ -1403,7 +1403,7 @@ void castRaysFromCamera() {
                                         int brightSub = color.r;
 
                                         glm::vec2 direction = h.hitSpot - cameraPosition;
-                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*1.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
                                         setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, h.travel/VIEWDISTANCE), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, h.travel/VIEWDISTANCE));
@@ -1421,7 +1421,7 @@ void castRaysFromCamera() {
                                         int brightAdd = colora.b;
                                         int brightSub = colora.r;
                                         glm::vec2 direction = h.hitSpot - cameraPosition;
-                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*1.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         glm::ivec3 color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
                                          setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
@@ -1474,7 +1474,7 @@ void castRaysFromCamera() {
                                         int brightSub = color.r;
 
                                         glm::vec2 direction = h.hitSpot - cameraPosition;
-                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*1.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
                                         setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
@@ -1493,7 +1493,7 @@ void castRaysFromCamera() {
                                         int brightSub = colora.r;
 
                                         glm::vec2 direction = h.hitSpot - cameraPosition;
-                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*2.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
+                                        int opalFrame = (int)(std::fmod(angleFromDirection(direction)*1.0f / TWOPI, 1.0f) * (opalFrames.frames.size()-1) * 2) % (opalFrames.frames.size()-1);
                                         //std::cout << "frame mult: " << std::to_string((angleFromDirection(direction)*2.0f) / TWOPI) << "\n";
                                         glm::ivec3 color = colorFromUV(uvX, uvY, opalFrames.frames[opalFrame], 3);
                                         setPixel(ind, glm::mix(std::min(255, std::max(0, (color.r-brightSub)+brightAdd)), BACKGROUNDCOLOR.r, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.g-brightSub)+brightAdd)), BACKGROUNDCOLOR.g, std::min(1.0f, h.travel/VIEWDISTANCE)), glm::mix(std::min(255, std::max(0, (color.b-brightSub)+brightAdd)), BACKGROUNDCOLOR.b, std::min(1.0f, h.travel/VIEWDISTANCE)));
